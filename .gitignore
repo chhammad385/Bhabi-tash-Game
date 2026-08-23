@@ -33,3 +33,9 @@ Thumbs.db
 .cache/
 .temp/
 *.local
+
+# Vercel
+.vercel
+
+# Keep the template last so the negation always wins
+!.env.example
