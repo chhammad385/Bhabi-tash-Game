@@ -186,7 +186,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
             </div>
             <h3 className="text-lg font-bold text-white mb-1">Create Private Game</h3>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Host a custom room for 3–12 friends with customizable timers, voice chat, and bot slots.
+              Host a custom room for 3–8 friends with customizable timers, voice chat, and bot slots.
             </p>
           </div>
 
