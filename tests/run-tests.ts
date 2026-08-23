@@ -5,6 +5,11 @@
  * own throwaway secret so the suite never depends on a developer's .env.
  */
 process.env.NODE_ENV = 'test';
+
+// Tests must never touch a real database. Clearing DATABASE_URL forces the
+// development in-memory store even when a local .env points at Neon, so
+// running the suite can never create or delete production rows.
+delete process.env.DATABASE_URL;
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || 'test-only-secret-not-used-in-production-0123456789abcdef';
 process.env.CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
