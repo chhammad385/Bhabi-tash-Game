@@ -344,6 +344,18 @@ router.get('/stats/leaderboard', readLimiter, async (_req: Request, res: Respons
   }
 });
 
+// TEMPORARY DIAGNOSTIC — reveals only the CALLER's own proxy chain so the
+// correct `trust proxy` depth can be determined on Render. Removed after use.
+router.get('/_diag/ip', (req: Request, res: Response) => {
+  res.json({
+    reqIp: req.ip,
+    reqIps: req.ips,
+    xForwardedFor: req.headers['x-forwarded-for'] ?? null,
+    trustProxySetting: req.app.get('trust proxy'),
+    socketRemote: req.socket.remoteAddress,
+  });
+});
+
 // GET /api/health
 router.get('/health', (_req: Request, res: Response) => {
   res.json({
