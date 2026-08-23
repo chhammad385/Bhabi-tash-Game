@@ -6,10 +6,17 @@
  */
 process.env.NODE_ENV = 'test';
 
-// Tests must never touch a real database. Clearing DATABASE_URL forces the
-// development in-memory store even when a local .env points at Neon, so
-// running the suite can never create or delete production rows.
-delete process.env.DATABASE_URL;
+/*
+ * Tests must never touch a real database.
+ *
+ * IMPORTANT: set this to an empty string, do NOT `delete` it. dotenv only
+ * fills in keys that are ABSENT from process.env, so deleting the key lets
+ * `import 'dotenv/config'` (pulled in later by server/env.ts) repopulate it
+ * from .env — which silently pointed the whole suite at production Neon and
+ * created junk accounts there. An empty string keeps the key present, so
+ * dotenv leaves it alone and the server falls back to the in-memory store.
+ */
+process.env.DATABASE_URL = '';
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || 'test-only-secret-not-used-in-production-0123456789abcdef';
 process.env.CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
@@ -20,6 +27,14 @@ async function main() {
   console.log('='.repeat(60));
   console.log('BHABHI — TEST SUITE');
   console.log('='.repeat(60));
+
+  // Guard: prove we are NOT connected to a real database before running anything.
+  const { isPostgresConnected } = await import('../server/db');
+  if (isPostgresConnected) {
+    console.error('\nFATAL: the test suite is connected to a real database. Aborting.');
+    process.exit(1);
+  }
+  console.log('Database: in-memory test store (no real database touched)');
 
   console.log('\n########## GAME ENGINE & RULES ##########');
   const { runEngineTests } = await import('./game-engine.test');
