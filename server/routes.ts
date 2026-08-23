@@ -26,13 +26,29 @@ const router = express.Router();
  * Rate limiters. Limits are per IP and sized so normal play is never blocked
  * while brute-force and spam are throttled.
  */
-const authLimiter = rateLimit({
+/**
+ * Login and registration get SEPARATE buckets on purpose. Sharing one meant a
+ * burst of failed logins also locked out account creation from the same IP
+ * (e.g. a household behind one NAT), which punished legitimate users.
+ */
+const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,                       // 10 login/register attempts per 15 min per IP
+  max: 10,                       // 10 FAILED logins per 15 min per IP
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true,  // only failed attempts count toward the limit
-  message: { error: 'Too many authentication attempts. Please try again later.' },
+  skipSuccessfulRequests: true,  // correct passwords never consume budget
+  message: { error: 'Too many failed login attempts. Please try again in a few minutes.' },
+});
+
+// Registration counts every attempt (successful ones included) because the
+// abuse case here is bulk account farming, not password guessing. Generous
+// enough for a family or friends sharing one connection.
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many accounts created from this network. Please try again later.' },
 });
 
 const profileLimiter = rateLimit({
@@ -98,7 +114,7 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
 // --- AUTH ROUTES ---
 
 // POST /api/auth/register
-router.post('/auth/register', authLimiter, async (req: Request, res: Response) => {
+router.post('/auth/register', registerLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password, displayName, avatar } = req.body;
     if (!username || !password || !displayName) {
@@ -154,7 +170,7 @@ router.post('/auth/register', authLimiter, async (req: Request, res: Response) =
 });
 
 // POST /api/auth/login
-router.post('/auth/login', authLimiter, async (req: Request, res: Response) => {
+router.post('/auth/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
