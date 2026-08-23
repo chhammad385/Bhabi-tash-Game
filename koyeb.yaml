@@ -1,0 +1,54 @@
+# Koyeb deployment blueprint for the Bhabhi backend.
+#
+# The free ("Hobby") instance supports WebSockets, which Socket.IO requires.
+# Secrets are referenced, never inlined — create them first with:
+#   koyeb secret create bhabhi-database-url
+#   koyeb secret create bhabhi-jwt-secret
+name: bhabhi-api
+
+services:
+  - name: bhabhi-api
+    type: web
+
+    git:
+      repository: github.com/chhammad385/Bhabi-tash-Game
+      branch: main
+      buildpack:
+        # --include=dev is required: vite/esbuild/typescript are devDependencies
+        # and the buildpack sets NODE_ENV=production, which would skip them.
+        build_command: npm ci --include=dev && npm run build
+        run_command: npm start
+
+    instance_types:
+      - type: free
+
+    # Washington DC — closest free region to the Neon database in us-east-2.
+    regions:
+      - was
+
+    # Koyeb injects PORT; the server reads process.env.PORT and binds 0.0.0.0.
+    ports:
+      - port: 8000
+        protocol: http
+
+    routes:
+      - path: /
+        port: 8000
+
+    health_checks:
+      - grace_period: 90
+        interval: 30
+        timeout: 10
+        http:
+          port: 8000
+          path: /api/health
+
+    env:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_URL
+        value: https://bhabhi-tash-game.vercel.app
+      - key: DATABASE_URL
+        secret: bhabhi-database-url
+      - key: JWT_SECRET
+        secret: bhabhi-jwt-secret
