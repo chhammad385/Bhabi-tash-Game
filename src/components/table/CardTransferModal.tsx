@@ -83,7 +83,7 @@ export const CardTransferModal: React.FC<CardTransferModalProps> = ({
             </div>
 
             {/* Offered Cards Scroll Preview */}
-            <div className="w-full flex items-center justify-center gap-2 overflow-x-auto py-2 px-1 max-w-full">
+            <div className="w-full flex items-center justify-start [justify-content:safe_center] gap-2 overflow-x-auto overscroll-x-contain py-2 px-2 max-w-full scrollbar-thin">
               {offer.cards && offer.cards.length > 0 ? (
                 offer.cards.map((card, idx) => (
                   <div key={card.id || idx} className="shrink-0">

@@ -12,3 +12,47 @@
   white-space: nowrap;
   border-width: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Horizontal scroll strips (hand of cards, opponent row).
+
+   NOTE ON CENTRING: these strips use `justify-content: safe center`, not plain
+   `center`. With plain `center` and overflow-x, the part of the content that
+   spills past the START edge becomes physically unreachable — you cannot
+   scroll to it, so the first card is clipped forever. The `safe` keyword makes
+   the browser fall back to flex-start once the content overflows. Browsers
+   without `safe` support drop the declaration and keep the `justify-start`
+   base class, which degrades correctly.
+--------------------------------------------------------------------------- */
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(71 85 105) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgb(15 23 42 / 0.6);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(71 85 105);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(100 116 139);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Card lift/ring effects render outside the card box; without room for them the
+   first and last card get visually clipped by the scroll container. */
+.hand-strip > * {
+  scroll-snap-align: center;
+}

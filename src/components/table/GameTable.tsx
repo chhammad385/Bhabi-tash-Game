@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MessageSquare,
   Mic,
@@ -66,6 +66,38 @@ export const GameTable: React.FC = () => {
   } | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+
+  /**
+   * The hand is a horizontal scroll strip. Two things it needs that the browser
+   * does not give for free:
+   *  1. A mouse wheel (which only produces deltaY) should scroll it sideways —
+   *     otherwise desktop players have no way to reach off-screen cards.
+   *  2. When it becomes your turn, the first playable card should be scrolled
+   *     into view rather than left hidden off the edge.
+   */
+  const handStripRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = handStripRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // Leave real horizontal gestures (trackpad swipe, shift+wheel) alone.
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 0) return;
+      // Only swallow the event while we can still move in that direction, so
+      // the page keeps scrolling normally once the strip hits an end.
+      const next = el.scrollLeft + e.deltaY;
+      if ((e.deltaY < 0 && el.scrollLeft > 0) || (e.deltaY > 0 && el.scrollLeft < max)) {
+        e.preventDefault();
+        el.scrollLeft = Math.max(0, Math.min(max, next));
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // User-configurable suit and rank sorting (persisted to localStorage)
@@ -323,7 +355,7 @@ export const GameTable: React.FC = () => {
       {/* Main Table Felt Arena */}
       <div className="relative flex-1 w-full max-w-6xl mx-auto p-1.5 sm:p-3 md:p-4 flex flex-col justify-between overflow-hidden min-h-0">
         {/* Opponents Orbit Layout - Horizontal scrollable strip on mobile, bento row on desktop */}
-        <div className="w-full flex items-center justify-start sm:justify-center overflow-x-auto py-1 px-1 gap-1.5 sm:gap-3 md:gap-4 z-10 scrollbar-none shrink-0">
+        <div className="w-full flex items-center justify-start sm:[justify-content:safe_center] overflow-x-auto overscroll-x-contain scroll-smooth py-1 px-2 gap-1.5 sm:gap-3 md:gap-4 z-10 scrollbar-none shrink-0">
           {opponents.map((opponent) => {
             const isTurn = gameState.currentTurn === opponent.id;
             const isNext = gameState.nextTurnPlayerId === opponent.id && !isTurn;
@@ -534,7 +566,10 @@ export const GameTable: React.FC = () => {
             </div>
 
             {/* Hand Cards Scrollable Strip with Smooth Overlap and Touch */}
-            <div className="w-full flex items-center justify-start sm:justify-center overflow-x-auto py-1 sm:py-2 px-1 gap-1 sm:gap-2 max-w-full scrollbar-thin">
+            <div
+              ref={handStripRef}
+              className="w-full flex items-center justify-start sm:[justify-content:safe_center] overflow-x-auto overscroll-x-contain scroll-smooth py-2 sm:py-3 px-3 gap-1 sm:gap-2 max-w-full scrollbar-thin"
+            >
               {sortedHand.length === 0 ? (
                 <div className="py-4 text-center text-slate-400 text-xs sm:text-sm font-semibold">
                   🎉 You have successfully played all your cards and are SAFE!
