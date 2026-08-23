@@ -16,6 +16,12 @@ interface GameContextType {
   chatMessages: ChatMessage[];
   unreadChatCount: number;
   activeInvite: GameInvitationNotification | null;
+  /** Unseen incoming friend requests, shown as a badge on the Friends button. */
+  friendRequestCount: number;
+  markFriendRequestsSeen: () => void;
+  /** Transient banner text for social events (friend requests, acceptances). */
+  toastMessage: string | null;
+  dismissToast: () => void;
   voiceManager: WebRTCVoiceManager | null;
   isVoiceConnected: boolean;
   isMicMuted: boolean;
@@ -57,6 +63,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [activeInvite, setActiveInvite] = useState<GameInvitationNotification | null>(null);
+  const [friendRequestCount, setFriendRequestCount] = useState(0);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isMatchmaking, setIsMatchmaking] = useState(false);
   const [matchmakingTarget, setMatchmakingTarget] = useState(4);
   const [matchmakingQueueCount, setMatchmakingQueueCount] = useState(1);
@@ -73,6 +81,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const prevTrickLengthRef = useRef<number>(0);
   const prevCardCountRef = useRef<number>(0);
   const prevTochooRef = useRef<any>(null);
+  const prevIsYourTurnRef = useRef<boolean>(false);
   /** Room the player is currently seated in, used to restore after reconnect. */
   const currentRoomRef = useRef<string | null>(null);
 
@@ -135,14 +144,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setGameState(state);
       currentRoomRef.current = state.roomCode;
 
-      // Sound triggers on state changes
+      /*
+       * Sound triggers fire on TRANSITIONS only.
+       *
+       * The server legitimately re-broadcasts the same phase several times
+       * (an ack and the engine's own notify both push a frame), so anything
+       * keyed on "phase === X" instead of "phase just became X" replayed its
+       * sound on every frame. That is why the game-over fanfare fired three or
+       * four times in a row.
+       */
+      const phaseChanged = state.phase !== prevPhaseRef.current;
+
       if (state.phase === 'playing' && prevPhaseRef.current === 'dealing') {
         sounds.playCardDeal();
       }
 
-      if (state.isYourTurn && !prevPhaseRef.current?.includes('playing_turn')) {
+      // Previously compared against a phase string that never exists
+      // ('playing_turn'), so this was always true and chimed on every frame.
+      if (state.isYourTurn && !prevIsYourTurnRef.current) {
         sounds.playYourTurn();
       }
+      prevIsYourTurnRef.current = state.isYourTurn;
 
       // Check Tochoo sound
       if (state.lastTochoo && state.lastTochoo.timestamp !== prevTochooRef.current?.timestamp) {
@@ -165,8 +187,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         prevCardCountRef.current = myPlayer.cardCount;
       }
 
-      // Check Bhabhi sound
-      if (state.phase === 'game_over') {
+      // Only on the transition into game_over, not on every repeat frame.
+      if (state.phase === 'game_over' && phaseChanged) {
         sounds.playBhabhi();
       }
 
@@ -182,6 +204,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.on('friend:invitation_received', (invite: GameInvitationNotification) => {
       setActiveInvite(invite);
       sounds.playYourTurn();
+    });
+
+    /*
+     * Friend requests arrive over REST, so without these the recipient saw
+     * nothing until they happened to open the friends drawer. The server now
+     * pushes them; surface a badge and a sound so they are noticed.
+     */
+    socket.on('friend:request_received', (req: { fromDisplayName?: string }) => {
+      setFriendRequestCount((n) => n + 1);
+      sounds.playChatPop();
+      setToastMessage(`${req?.fromDisplayName || 'Someone'} sent you a friend request`);
+    });
+
+    socket.on('friend:request_accepted', (req: { byDisplayName?: string }) => {
+      sounds.playChatPop();
+      setToastMessage(`${req?.byDisplayName || 'Your request'} accepted your friend request`);
     });
 
     socket.on('matchmaking:matched', ({ roomCode }: { roomCode: string }) => {
@@ -235,6 +273,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('game:state_update');
       socket.off('chat:message');
       socket.off('friend:invitation_received');
+      socket.off('friend:request_received');
+      socket.off('friend:request_accepted');
       socket.off('matchmaking:matched');
       socket.off('voice:peer_speaking');
       socket.off('voice:peer_muted');
@@ -428,6 +468,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         chatMessages,
         unreadChatCount,
         activeInvite,
+        friendRequestCount,
+        markFriendRequestsSeen: () => setFriendRequestCount(0),
+        toastMessage,
+        dismissToast: () => setToastMessage(null),
         voiceManager: voiceManagerRef.current,
         isVoiceConnected,
         isMicMuted,

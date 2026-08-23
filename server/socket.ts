@@ -14,6 +14,23 @@ import {
   requireHost,
 } from './socketAuth';
 
+/** Set once setupSocketIO runs, so REST routes can push realtime events. */
+let ioInstance: SocketIOServer | null = null;
+
+/**
+ * Pushes an event to every live socket belonging to one user (all their tabs).
+ * Used by REST routes — e.g. a friend request arriving — so the recipient is
+ * notified immediately instead of only noticing on their next manual refresh.
+ * Silently no-ops when the user is offline.
+ */
+export function emitToUser(userId: string, event: string, payload: unknown): boolean {
+  if (!ioInstance) return false;
+  const sockets = userSocketMap.get(userId);
+  if (!sockets || sockets.size === 0) return false;
+  sockets.forEach(sid => ioInstance!.to(sid).emit(event, payload));
+  return true;
+}
+
 export const activeGames = new Map<string, GameEngine>();
 /** userId -> set of that user's live socket ids (multi-tab safe). */
 export const userSocketMap = new Map<string, Set<string>>();
@@ -778,6 +795,7 @@ export function setupSocketIO(server: http.Server) {
 
   reaper.unref?.();
 
+  ioInstance = io;
   console.log('[Socket.IO] Ready. Allowed origins:', ALLOWED_ORIGINS.join(', '));
   return io;
 }

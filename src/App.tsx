@@ -10,6 +10,7 @@ import { FriendsDrawer } from './components/social/FriendsDrawer';
 import { StatsModal } from './components/social/StatsModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { InviteToast } from './components/common/InviteToast';
+import { SocialToast } from './components/common/SocialToast';
 
 const MainContent: React.FC = () => {
   const { gameState, isInGame, isInLobby, joinRoom } = useGame();
@@ -56,6 +57,7 @@ const MainContent: React.FC = () => {
       <StatsModal isOpen={showStats} onClose={() => setShowStats(false)} />
       <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
       <InviteToast />
+      <SocialToast />
     </div>
   );
 };

@@ -108,11 +108,36 @@ export function requireRoomMembership(
   const user = socket.user;
   if (!user) return { ok: false, error: 'Not authenticated.' };
 
-  const roomCode = socket.currentRoomCode;
-  if (!roomCode) return { ok: false, error: 'You are not in a game room.' };
+  let roomCode = socket.currentRoomCode;
+  let engine = roomCode ? activeGames.get(roomCode) : undefined;
 
-  const engine = activeGames.get(roomCode);
-  if (!engine) return { ok: false, error: 'Game room no longer exists.' };
+  /*
+   * Recover the binding when this socket has no room attached.
+   *
+   * `currentRoomCode` lives on the socket, so it is lost whenever the socket
+   * is replaced — a page refresh, a dropped connection, a second tab. State
+   * broadcasts still reach the player (those are addressed by userId through
+   * userSocketMap), so the game looked completely normal to them while every
+   * action silently failed: the lobby rendered, but "I am Ready", playing a
+   * card and chat all did nothing.
+   *
+   * Seat ownership in the engine is the real source of truth, so fall back to
+   * it and re-attach the socket. This is not a privilege escalation: it only
+   * finds games where this authenticated user ALREADY holds a seat.
+   */
+  if (!engine) {
+    for (const [code, candidate] of activeGames.entries()) {
+      if (candidate.players.some(p => p.userId === user.id)) {
+        roomCode = code;
+        engine = candidate;
+        socket.currentRoomCode = code;
+        socket.join(`room:${code}`);
+        break;
+      }
+    }
+  }
+
+  if (!roomCode || !engine) return { ok: false, error: 'You are not in a game room.' };
 
   const isMember = engine.players.some(p => p.userId === user.id);
   if (!isMember) return { ok: false, error: 'You are not a player in this game.' };

@@ -388,11 +388,130 @@ export async function runSocketTests() {
     assert(!freshSock.error, 'the fresh token can open a socket');
     freshSock.socket.close();
 
+    // Later sections reuse this account, so keep its token current — the old
+    // one is now deliberately rejected.
+    accounts.carol.token = freshToken;
+
     // Old password must no longer work; the new one must.
     const oldPw = await post('/api/auth/login', { username: renamedUsername, password: 'correct-horse-battery' });
     assertEqual(oldPw.status, 401, 'the OLD password no longer signs in');
     const newPw = await post('/api/auth/login', { username: renamedUsername, password: 'brand-new-pass-1' });
     assertEqual(newPw.status, 200, 'the NEW password signs in');
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('Actions still work after a refresh replaces the socket');
+
+  {
+    // A fresh socket has no currentRoomCode, exactly like a browser refresh.
+    // The player still RECEIVES state (broadcasts are addressed by userId), so
+    // the lobby renders normally — but before the fix every action silently
+    // failed, which is what made "I am Ready" look unclickable.
+    const B2 = (await connect({ token: accounts.bob.token })).socket;
+
+    const ready = await emit(B2, 'room:toggle_ready');
+    assert(ready.success, `toggle_ready works on a socket that never called join/rejoin (${ready.error || 'ok'})`);
+
+    const chat = await emit(B2, 'chat:send', { text: 'still here after refresh' });
+    assert(chat.success, 'chat works on the recovered socket');
+    B2.close();
+
+    // Recovery must never invent membership. A brand-new account has no seat
+    // anywhere, so it must be refused.
+    const outsider = await post('/api/auth/register', {
+      username: `out_${stamp.toString(36).slice(-6)}`,
+      password: 'correct-horse-battery',
+      displayName: 'outsider',
+    });
+    const O = (await connect({ token: outsider.data.token })).socket;
+    const stolen = await emit(O, 'room:toggle_ready');
+    assert(!stolen.success, 'a user with NO seat anywhere is not auto-attached to any room');
+    assert(
+      /not in a game room/i.test(stolen.error || ''),
+      'the outsider is told they are not in a room'
+    );
+    O.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('Play again resets the lobby correctly');
+
+  {
+    const hostSock = (await connect({ token: accounts.alice.token })).socket;
+    const otherSock = (await connect({ token: accounts.bob.token })).socket;
+
+    let hostState: any = null;
+    let otherState: any = null;
+    hostSock.on('game:state_update', (x: any) => { hostState = x; });
+    otherSock.on('game:state_update', (x: any) => { otherState = x; });
+
+    const r = await emit(hostSock, 'room:create', { settings: { turnTimer: 15 } });
+    await emit(hostSock, 'room:add_bot', { difficulty: 'easy' });
+    await emit(otherSock, 'room:join', { roomCode: r.roomCode });
+    await emit(otherSock, 'room:toggle_ready');
+    await new Promise(res => setTimeout(res, 300));
+
+    const started = await emit(hostSock, 'game:start');
+    assert(started.success, 'game starts with host + bot + one other player');
+
+    // End the game immediately instead of playing it out.
+    const { activeGames } = await import('../server/socket');
+    const engine: any = activeGames.get(r.roomCode);
+    engine.players.forEach((pl: any, i: number) => { if (i > 0) { pl.cards = []; pl.cardCount = 0; } });
+    engine.checkPlayerEscapes?.();
+    engine.phase = 'playing';
+    engine.finishTrickReview?.();
+    if (engine.phase !== 'game_over') {
+      engine.phase = 'game_over';
+      engine.notifyStateChange();
+    }
+    await new Promise(res => setTimeout(res, 400));
+
+    assertEqual(hostState?.phase, 'game_over', 'both clients see game_over');
+
+    const again = await emit(hostSock, 'game:play_again');
+    assert(again.success, 'host can start a new round');
+    await new Promise(res => setTimeout(res, 400));
+
+    assertEqual(hostState?.phase, 'waiting', 'host is returned to the lobby');
+    assertEqual(otherState?.phase, 'waiting', 'the OTHER player is also returned to the lobby');
+
+    const meHost = hostState.players.find((pl: any) => pl.userId === accounts.alice.id);
+    const meOther = otherState.players.find((pl: any) => pl.userId === accounts.bob.id);
+    assertEqual(meHost?.isReady, true, 'host is ready by default in the new round');
+    assertEqual(meOther?.isReady, false, 'the other player must ready up again');
+
+    const toggled = await emit(otherSock, 'room:toggle_ready');
+    assert(toggled.success, 'the other player CAN press ready after play again');
+    await new Promise(res => setTimeout(res, 300));
+    const meOther2 = otherState.players.find((pl: any) => pl.userId === accounts.bob.id);
+    assertEqual(meOther2?.isReady, true, 'their ready state actually flips');
+
+    hostSock.close();
+    otherSock.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('Friend requests notify the recipient in realtime');
+
+  {
+    const recipient = (await connect({ token: accounts.carol.token })).socket;
+    const heard = nextEvent(recipient, 'friend:request_received', 5000);
+
+    const sent = await post(
+      '/api/friends/request',
+      { playerId: accounts.carol.playerId },
+      accounts.bob.token
+    );
+    assert(sent.status === 200, `friend request accepted by the API (HTTP ${sent.status})`);
+
+    const evt = await heard;
+    assert(evt !== null, 'recipient receives a realtime friend:request_received event');
+    assertEqual(evt?.fromUserId, accounts.bob.id, 'the event names the correct sender');
+    assert(!!evt?.fromDisplayName, 'the event carries a display name for the toast');
+    assert(!!evt?.friendshipId, 'the event carries the friendship id');
+
+    recipient.close();
   }
 
   /* ---------------------------------------------------------------- */

@@ -271,7 +271,8 @@ export async function createUser(data: {
     const res = await pool.query(
       `INSERT INTO users (username, player_id, password_hash, display_name, avatar)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, username, player_id as "playerId", display_name as "displayName", avatar, created_at as "createdAt"`,
+       RETURNING id, username, player_id as "playerId", display_name as "displayName", avatar,
+                 created_at as "createdAt", password_changed_at as "passwordChangedAt"`,
       [data.username.toLowerCase(), data.playerId, data.passwordHash, data.displayName, data.avatar]
     );
     const user = res.rows[0];
@@ -313,6 +314,7 @@ export async function createUser(data: {
       displayName: user.displayName,
       avatar: user.avatar,
       createdAt: user.createdAt,
+      passwordChangedAt: user.passwordChangedAt,
     };
   }
 }
@@ -321,7 +323,9 @@ export async function findUserByUsername(username: string) {
   const norm = username.toLowerCase().trim();
   if (pool && isPostgresConnected) {
     const res = await pool.query(
-      `SELECT id, username, player_id as "playerId", password_hash as "passwordHash", display_name as "displayName", avatar, created_at as "createdAt"
+      `SELECT id, username, player_id as "playerId", password_hash as "passwordHash",
+              display_name as "displayName", avatar, created_at as "createdAt",
+              password_changed_at as "passwordChangedAt"
        FROM users WHERE username = $1`,
       [norm]
     );

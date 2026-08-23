@@ -20,7 +20,7 @@ import {
   generateUniquePlayerId,
   isPostgresConnected,
 } from './db';
-import { activeGames, userSocketMap } from './socket';
+import { activeGames, userSocketMap, emitToUser } from './socket';
 
 const router = express.Router();
 
@@ -96,11 +96,42 @@ export interface AuthRequest extends Request {
  * actually signs other devices out on a password change. `iat` is in seconds.
  */
 export function isTokenStale(decoded: any, user: any): boolean {
-  if (!user?.passwordChangedAt || !decoded?.iat) return false;
+  if (!user?.passwordChangedAt) return false;
   const changedAt = new Date(user.passwordChangedAt).getTime();
   if (Number.isNaN(changedAt)) return false;
-  // Allow 1s of slack so a token minted in the same second as the change survives.
+
+  // Preferred path: tokens carry the exact millisecond stamp they were minted
+  // against, so the comparison is exact. `iat` alone is useless here because
+  // it only has SECOND resolution — a token issued and a password changed
+  // within the same second were indistinguishable, letting a supposedly
+  // revoked session survive.
+  if (typeof decoded?.pwdAt === 'number') {
+    return decoded.pwdAt !== changedAt;
+  }
+
+  // Legacy tokens minted before the claim existed: fall back to `iat`.
+  if (!decoded?.iat) return false;
   return decoded.iat * 1000 < changedAt - 1000;
+}
+
+/** Signs a session token bound to the account's current password stamp. */
+function signSessionToken(user: {
+  id: string;
+  username: string;
+  playerId: string;
+  passwordChangedAt?: any;
+}): string {
+  const stamp = user.passwordChangedAt ? new Date(user.passwordChangedAt).getTime() : undefined;
+  return jwt.sign(
+    {
+      id: user.id,
+      username: user.username,
+      playerId: user.playerId,
+      ...(stamp !== undefined && !Number.isNaN(stamp) ? { pwdAt: stamp } : {}),
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+  );
 }
 
 export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -167,11 +198,7 @@ router.post('/auth/register', registerLimiter, async (req: Request, res: Respons
       avatar: avatar || 'avatar-1',
     });
 
-    const token = jwt.sign(
-      { id: user.id, username: user.username, playerId: user.playerId },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
-    );
+    const token = signSessionToken(user);
 
     res.status(201).json({
       token,
@@ -207,11 +234,7 @@ router.post('/auth/login', loginLimiter, async (req: Request, res: Response) => 
       return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
-    const token = jwt.sign(
-      { id: user.id, username: user.username, playerId: user.playerId },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
-    );
+    const token = signSessionToken(user);
 
     res.json({
       token,
@@ -332,11 +355,12 @@ router.post('/auth/password', profileLimiter, requireAuth, async (req: AuthReque
 
     // Issue a replacement token so this device stays signed in while every
     // other outstanding token is now stale.
-    const token = jwt.sign(
-      { id: req.user!.id, username: req.user!.username, playerId: req.user!.playerId },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
-    );
+    const token = signSessionToken({
+      id: req.user!.id,
+      username: req.user!.username,
+      playerId: req.user!.playerId,
+      passwordChangedAt: result.passwordChangedAt,
+    });
 
     res.json({
       success: true,
@@ -383,6 +407,18 @@ router.post('/friends/request', friendLimiter, requireAuth, async (req: AuthRequ
     }
 
     const friendship = await sendFriendRequest(req.user!.id, targetUser.id);
+
+    // Push a realtime notification so the recipient sees it immediately
+    // instead of only noticing the next time they open the friends drawer.
+    emitToUser(targetUser.id, 'friend:request_received', {
+      friendshipId: friendship?.id,
+      fromUserId: req.user!.id,
+      fromDisplayName: req.user!.displayName,
+      fromPlayerId: req.user!.playerId,
+      fromAvatar: req.user!.avatar,
+      createdAt: Date.now(),
+    });
+
     res.json({ success: true, friendship });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to send friend request.' });
@@ -399,6 +435,21 @@ router.post('/friends/respond', friendLimiter, requireAuth, async (req: AuthRequ
     }
 
     const result = await respondFriendRequest(friendshipId, req.user!.id, action);
+
+    // Tell the original requester the outcome so their list updates live.
+    if (result && action === 'ACCEPT') {
+      const friends = await getFriendsList(req.user!.id);
+      const rel = friends.find((f: any) => f.id === friendshipId);
+      if (rel?.friendId) {
+        emitToUser(rel.friendId, 'friend:request_accepted', {
+          friendshipId,
+          byUserId: req.user!.id,
+          byDisplayName: req.user!.displayName,
+          byPlayerId: req.user!.playerId,
+        });
+      }
+    }
+
     res.json({ success: true, result });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update request' });

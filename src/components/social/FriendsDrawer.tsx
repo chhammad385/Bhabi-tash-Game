@@ -12,7 +12,7 @@ interface FriendsDrawerProps {
 
 export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({ isOpen, onClose }) => {
   const { token, user } = useAuth();
-  const { inviteFriend, gameState } = useGame();
+  const { inviteFriend, gameState, markFriendRequestsSeen } = useGame();
   const [friends, setFriends] = useState<FriendRelation[]>([]);
   const [searchPlayerId, setSearchPlayerId] = useState('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -29,6 +29,8 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({ isOpen, onClose })
     if (isOpen) {
       fetchFriends();
       setStatusMsg(null);
+      // The badge exists to pull the user here; opening the drawer clears it.
+      markFriendRequestsSeen();
     }
   }, [isOpen, token]);
 
