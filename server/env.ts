@@ -70,6 +70,23 @@ export const JWT_SECRET: string = resolveJwtSecret();
 export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /**
+ * Number of trusted reverse-proxy hops in front of the app.
+ *
+ * On Render the chain is:  client -> Cloudflare -> Render proxy -> app
+ * giving  X-Forwarded-For: <client>, <cloudflare>, <render-internal>
+ *
+ * Express counts trusted hops from the RIGHT, so 3 resolves req.ip to the real
+ * client. Counting from the right also makes this spoof-resistant: a client
+ * that injects its own X-Forwarded-For only prepends entries on the left,
+ * which are ignored.
+ *
+ * Getting this wrong is a security bug, not a cosmetic one — too low and the
+ * rate limiter keys on a shared proxy IP, so every user behind that proxy
+ * shares one bucket and a single abuser can lock out everyone else.
+ */
+export const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY_HOPS ?? (IS_PRODUCTION ? 3 : 0));
+
+/**
  * PostgreSQL connection string.
  *
  * Required in production. In development its absence is tolerated so the

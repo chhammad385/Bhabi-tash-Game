@@ -9,7 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { setupSocketIO } from './server/socket';
 import apiRoutes from './server/routes';
 import { initDatabase } from './server/db';
-import { PORT, IS_PRODUCTION, isOriginAllowed, logConfigSummary } from './server/env';
+import { PORT, IS_PRODUCTION, isOriginAllowed, logConfigSummary, TRUST_PROXY_HOPS } from './server/env';
 
 async function startServer() {
   const app = express();
@@ -20,8 +20,10 @@ async function startServer() {
   // Fails fast (process.exit) in production if the database is unreachable.
   await initDatabase();
 
-  // Behind Render's proxy: needed so express-rate-limit sees real client IPs.
-  app.set('trust proxy', 1);
+  // Behind Render's proxy chain (Cloudflare + Render internal). Must resolve
+  // req.ip to the REAL client, otherwise rate limiting keys on a shared proxy
+  // address. See TRUST_PROXY_HOPS in server/env.ts.
+  app.set('trust proxy', TRUST_PROXY_HOPS);
 
   // Security headers.
   app.use(
