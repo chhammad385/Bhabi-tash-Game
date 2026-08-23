@@ -1,5 +1,7 @@
 # ♠ Bhabhi — Online Real-Time Multiplayer Card Game
 
+**Live:** [bhabhi-tash-game.vercel.app](https://bhabhi-tash-game.vercel.app) &nbsp;·&nbsp; API: [bhabhi-api.onrender.com](https://bhabhi-api.onrender.com/api/health)
+
 A server-authoritative online multiplayer implementation of **Bhabhi** (also known as
 *Thulla* or *Getaway*), designed to run entirely on free hosting tiers:
 Vercel (frontend) + Render (backend) + Neon PostgreSQL (database).
@@ -122,6 +124,7 @@ Environment variables:
 | `JWT_SECRET` | yes | ≥32 random characters |
 | `CLIENT_URL` | yes | Your Vercel origin, e.g. `https://your-app.vercel.app` |
 | `NODE_ENV` | yes | `production` |
+| `TRUST_PROXY_HOPS` | no | Defaults to `3` in production, matching Render's `client -> Cloudflare -> Render proxy` chain. Only change this if the platform's proxy depth differs — too low and rate limiting keys on a shared proxy IP instead of the real client. |
 
 A `render.yaml` blueprint is included.
 
