@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# The API is not content — keep crawlers out of it.
+Disallow: /api/
+
+Sitemap: https://bhabhi-tash-game.vercel.app/sitemap.xml

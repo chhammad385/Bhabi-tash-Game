@@ -90,9 +90,13 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
               <Sparkles className="w-3.5 h-3.5" />
               <span>Real-Time Online Multiplayer Card Battle</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight font-serif">
-              Escape the Hand. <span className="text-amber-400">Don't be the Bhabhi.</span>
-            </h2>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight font-serif">
+              Play Bhabhi Online <span className="text-amber-400">— don't be the Bhabhi.</span>
+            </h1>
+            <p className="sr-only">
+              Bhabhi, also known as Thulla or Getaway, is a South Asian shedding card game for 3 to 8
+              players. Free multiplayer with voice chat, private rooms and AI bots.
+            </p>
             <p className="text-slate-300 text-sm sm:text-base mt-2 leading-relaxed">
               Play the legendary South Asian card getaway game online with friends or players worldwide.
               Ace of Spades leads, follow suit, or drop a brutal <strong>Tochoo</strong> to dump the entire trick onto your opponents!

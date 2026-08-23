@@ -2,17 +2,140 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bhabhi — Online Multiplayer Card Game</title>
-    <meta name="description" content="Play Bhabhi (Thulla) online with friends — real-time multiplayer card game with voice chat." />
-    <meta property="og:title" content="Bhabhi — Online Multiplayer Card Game" />
-    <meta property="og:description" content="Play Bhabhi (Thulla) online with friends — real-time multiplayer card game with voice chat." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <title>Bhabhi Online — Play Thulla Card Game Free with Friends</title>
+    <meta
+      name="description"
+      content="Play Bhabhi (Thulla / Getaway) online free with 3–8 friends. Real-time multiplayer card game with voice chat, private rooms, AI bots and a server-authoritative anti-cheat engine."
+    />
+    <link rel="canonical" href="https://bhabhi-tash-game.vercel.app/" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="author" content="Bhabhi Online" />
+    <meta name="theme-color" content="#020617" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- Icons -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bhabhi Online" />
+    <meta property="og:title" content="Bhabhi Online — Play Thulla Card Game Free with Friends" />
+    <meta
+      property="og:description"
+      content="Real-time multiplayer Bhabhi (Thulla / Getaway). Private rooms, voice chat, AI bots, 3–8 players. Free to play in your browser."
+    />
+    <meta property="og:url" content="https://bhabhi-tash-game.vercel.app/" />
+    <meta property="og:image" content="https://bhabhi-tash-game.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Bhabhi Online — real-time multiplayer Thulla and Getaway card game" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Bhabhi Online — Play Thulla Card Game Free with Friends" />
+    <meta
+      name="twitter:description"
+      content="Real-time multiplayer Bhabhi (Thulla / Getaway). Private rooms, voice chat, AI bots, 3–8 players. Free to play in your browser."
+    />
+    <meta name="twitter:image" content="https://bhabhi-tash-game.vercel.app/og-image.png" />
+    <meta name="twitter:image:alt" content="Bhabhi Online — real-time multiplayer Thulla and Getaway card game" />
+
+    <!-- Speed up the first API/socket call to the backend -->
+    <link rel="preconnect" href="https://bhabhi-api.onrender.com" crossorigin />
+    <link rel="dns-prefetch" href="https://bhabhi-api.onrender.com" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "VideoGame",
+            "@id": "https://bhabhi-tash-game.vercel.app/#game",
+            "name": "Bhabhi Online",
+            "alternateName": ["Thulla", "Getaway", "Bhabhi Card Game"],
+            "url": "https://bhabhi-tash-game.vercel.app/",
+            "image": "https://bhabhi-tash-game.vercel.app/og-image.png",
+            "description": "Free real-time multiplayer Bhabhi (Thulla / Getaway) card game for 3 to 8 players, with private rooms, WebRTC voice chat and AI bots.",
+            "genre": ["Card Game", "Multiplayer", "Strategy"],
+            "playMode": ["MultiPlayer", "SinglePlayer"],
+            "numberOfPlayers": { "@type": "QuantitativeValue", "minValue": 3, "maxValue": 8 },
+            "applicationCategory": "Game",
+            "operatingSystem": "Any modern web browser",
+            "browserRequirements": "Requires JavaScript and WebSocket support",
+            "inLanguage": "en",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://bhabhi-tash-game.vercel.app/#website",
+            "url": "https://bhabhi-tash-game.vercel.app/",
+            "name": "Bhabhi Online",
+            "description": "Play Bhabhi (Thulla) online free with friends.",
+            "inLanguage": "en"
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://bhabhi-tash-game.vercel.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is the Bhabhi card game?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Bhabhi, also called Thulla or Getaway, is a South Asian shedding card game. Players must follow the led suit; the last player still holding cards loses and becomes the Bhabhi."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How many players can play Bhabhi online?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Between 3 and 8 players using a single standard 52-card deck. Empty seats can be filled with AI bots."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is a Tochoo or Thulla?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "If you cannot follow the led suit you may play any card. This ends the trick immediately and whoever played the highest card of the led suit must pick up every card on the table."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is Bhabhi Online free to play?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Bhabhi Online is completely free, runs in the browser, and needs no download or installation."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+
+    <noscript>
+      <h1>Bhabhi Online — play Thulla card game free with friends</h1>
+      <p>
+        Bhabhi (also known as Thulla or Getaway) is a South Asian shedding card game for 3 to 8
+        players. Follow the led suit, drop a Tochoo when you are void, and avoid being the last
+        player holding cards — the Bhabhi.
+      </p>
+      <p>This game requires JavaScript. Please enable JavaScript in your browser to play.</p>
+    </noscript>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

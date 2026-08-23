@@ -39,22 +39,24 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="w-full bg-slate-900/95 border-b border-slate-800 backdrop-blur-md px-2 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between z-30 sticky top-0">
       {/* Brand & Logo */}
-      <div className="flex items-center gap-1.5 sm:gap-3">
-        <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-tr from-amber-600 via-rose-600 to-indigo-600 p-[1px] sm:p-[1.5px] flex items-center justify-center shadow-lg shrink-0">
-          <div className="w-full h-full bg-slate-950 rounded-[6px] sm:rounded-[7px] flex items-center justify-center font-black text-amber-400 text-sm sm:text-lg">
-            ♠
-          </div>
-        </div>
+      <a href="/" className="flex items-center gap-1.5 sm:gap-3 group" aria-label="Bhabhi Online — home">
+        <img
+          src="/favicon.svg"
+          alt="Bhabhi Online logo"
+          width={36}
+          height={36}
+          className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg shadow-lg shrink-0 transition-transform group-hover:scale-105"
+        />
         <div>
           <div className="flex items-center gap-1 sm:gap-1.5">
-            <h1 className="text-sm sm:text-base md:text-lg font-black tracking-tight text-white font-mono">BHABHI</h1>
+            <span className="text-sm sm:text-base md:text-lg font-black tracking-tight text-white font-mono">BHABHI</span>
             <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-widest px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
               Online
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 hidden md:block">Multiplayer Thulla & Getaway Card Arena</p>
+          <p className="text-[10px] text-slate-400 hidden md:block">Multiplayer Thulla &amp; Getaway Card Arena</p>
         </div>
-      </div>
+      </a>
 
       {/* Center / Right controls */}
       <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
