@@ -68,6 +68,7 @@ interface MemUser {
   avatar: string;
   createdAt: Date;
   updatedAt: Date;
+  passwordChangedAt: Date;
 }
 
 interface MemFriendship {
@@ -172,8 +173,13 @@ export async function initDatabase() {
         display_name VARCHAR(64) NOT NULL,
         avatar VARCHAR(64) DEFAULT 'avatar-1',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        password_changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
+
+      -- Idempotent migration for databases created before this column existed.
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
       CREATE TABLE IF NOT EXISTS friendships (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -288,6 +294,7 @@ export async function createUser(data: {
       avatar: data.avatar,
       createdAt: new Date(),
       updatedAt: new Date(),
+      passwordChangedAt: new Date(),
     };
     memUsers.set(id, user);
     memStats.set(id, {
@@ -331,7 +338,9 @@ export async function findUserByUsername(username: string) {
 export async function findUserById(id: string) {
   if (pool && isPostgresConnected) {
     const res = await pool.query(
-      `SELECT id, username, player_id as "playerId", password_hash as "passwordHash", display_name as "displayName", avatar, created_at as "createdAt"
+      `SELECT id, username, player_id as "playerId", password_hash as "passwordHash",
+              display_name as "displayName", avatar, created_at as "createdAt",
+              password_changed_at as "passwordChangedAt"
        FROM users WHERE id = $1`,
       [id]
     );
@@ -397,6 +406,64 @@ export async function updateUserProfile(id: string, updates: { displayName?: str
       avatar: u.avatar,
     };
   }
+}
+
+/**
+ * Changes a user's login username. The public Player ID is deliberately left
+ * untouched — friends already know it and it is the stable identifier.
+ * Returns null when the name is taken by somebody else.
+ */
+export async function updateUsername(id: string, newUsername: string) {
+  const norm = newUsername.trim().toLowerCase();
+
+  if (pool && isPostgresConnected) {
+    const taken = await pool.query(`SELECT id FROM users WHERE username = $1 AND id <> $2`, [norm, id]);
+    if ((taken.rowCount ?? 0) > 0) return null;
+
+    const res = await pool.query(
+      `UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2
+       RETURNING id, username, player_id as "playerId", display_name as "displayName", avatar`,
+      [norm, id]
+    );
+    return res.rows[0] ?? null;
+  }
+
+  assertMemoryStoreAllowed('updateUsername');
+  for (const u of memUsers.values()) {
+    if (u.username === norm && u.id !== id) return null;
+  }
+  const u = memUsers.get(id);
+  if (!u) return null;
+  u.username = norm;
+  u.updatedAt = new Date();
+  return { id: u.id, username: u.username, playerId: u.playerId, displayName: u.displayName, avatar: u.avatar };
+}
+
+/**
+ * Sets a new password hash and stamps password_changed_at.
+ *
+ * That stamp is what makes a password change meaningful: `requireAuth` and the
+ * socket handshake reject any token issued before it, so changing the password
+ * signs out every other device. Without it, an attacker holding a stolen token
+ * would keep access even after the victim changed their password.
+ */
+export async function updatePassword(id: string, passwordHash: string) {
+  if (pool && isPostgresConnected) {
+    const res = await pool.query(
+      `UPDATE users SET password_hash = $1, password_changed_at = NOW(), updated_at = NOW()
+       WHERE id = $2 RETURNING id, password_changed_at as "passwordChangedAt"`,
+      [passwordHash, id]
+    );
+    return res.rows[0] ?? null;
+  }
+
+  assertMemoryStoreAllowed('updatePassword');
+  const u = memUsers.get(id);
+  if (!u) return null;
+  u.passwordHash = passwordHash;
+  u.passwordChangedAt = new Date();
+  u.updatedAt = new Date();
+  return { id: u.id, passwordChangedAt: u.passwordChangedAt };
 }
 
 // Friendships

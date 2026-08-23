@@ -12,7 +12,8 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (username: string, password: string, displayName: string, avatar: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  updateProfile: (displayName: string, avatar: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (updates: { displayName?: string; avatar?: string; username?: string }) => Promise<{ success: boolean; error?: string }>;
+  changePassword: (newPassword: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   setGuestProfile: (displayName: string, avatar: string) => void;
 }
 
@@ -93,16 +94,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     disconnectSocket();
   };
 
-  const updateProfile = async (displayName: string, avatar: string) => {
+  const updateProfile = async (updates: { displayName?: string; avatar?: string; username?: string }) => {
     if (!token) return { success: false, error: 'You must be signed in.' };
 
     const { ok, data } = await apiFetch<any>('/api/auth/profile', {
       method: 'PATCH',
-      body: { displayName, avatar },
+      body: updates,
     });
     if (!ok) return { success: false, error: data?.error || 'Update failed' };
     setUser(data.user);
     return { success: true };
+  };
+
+  /**
+   * Changes the password. The current password is intentionally not required —
+   * being signed in is treated as proof. The server invalidates every token
+   * issued before the change and hands back a fresh one, so this device stays
+   * signed in while all others are signed out.
+   */
+  const changePassword = async (newPassword: string) => {
+    if (!token) return { success: false, error: 'You must be signed in.' };
+
+    const { ok, data } = await apiFetch<any>('/api/auth/password', {
+      method: 'POST',
+      body: { newPassword },
+    });
+    if (!ok) return { success: false, error: data?.error || 'Password change failed' };
+
+    if (data?.token) {
+      localStorage.setItem(TOKEN_KEY, data.token);
+      setToken(data.token);
+      // Reconnect the socket with the new token; the old one is now stale.
+      updateSocketAuth(data.token);
+    }
+    return { success: true, message: data?.message };
   };
 
   /**
@@ -125,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         updateProfile,
+        changePassword,
         setGuestProfile,
       }}
     >

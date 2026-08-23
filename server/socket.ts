@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { GameEngine } from './game/GameEngine';
 import { ChatMessage, GameInvitationNotification } from '../src/types/game';
 import { findUserById, areUsersFriends, randomCode } from './db';
+import { isTokenStale } from './routes';
 import { JWT_SECRET, isOriginAllowed, ALLOWED_ORIGINS } from './env';
 import {
   AuthenticatedSocket,
@@ -107,6 +108,10 @@ export function setupSocketIO(server: http.Server) {
       // Identity comes exclusively from the verified token + database.
       const user = await findUserById(decoded.id);
       if (!user) return next(new Error('AUTH_INVALID'));
+
+      // A password change invalidates every token minted before it, so a
+      // hijacked session cannot survive the victim resetting their password.
+      if (isTokenStale(decoded, user)) return next(new Error('AUTH_STALE'));
 
       socket.user = {
         id: user.id,

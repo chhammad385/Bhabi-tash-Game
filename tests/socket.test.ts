@@ -27,6 +27,25 @@ async function post(path: string, body: any, token?: string) {
   return { status: res.status, data: await res.json().catch(() => null) };
 }
 
+async function patch(path: string, body: any, token?: string) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, data: await res.json().catch(() => null) };
+}
+
+async function get(path: string, token?: string) {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  return { status: res.status, data: await res.json().catch(() => null) };
+}
+
 function connect(auth: Record<string, unknown>): Promise<{ socket: Socket; error?: string }> {
   return new Promise(resolve => {
     const socket = ioClient(BASE, { auth, transports: ['websocket'], forceNew: true, reconnection: false });
@@ -299,6 +318,81 @@ export async function runSocketTests() {
     assert(!!res.state, 'the server replies with a fresh sanitized state');
     assertEqual(res.state.roomCode, roomCode, 'the restored state is for the correct room');
     B2.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('Account settings: display name, username, password');
+
+  let renamedUsername = '';
+
+  {
+    // Display name + username change, Player ID must survive untouched.
+    const originalPlayerId = accounts.carol.playerId;
+    const newName = `cnew_${stamp.toString(36).slice(-6)}`;
+
+    const upd = await patch('/api/auth/profile', { displayName: 'Carol Two', username: newName }, accounts.carol.token);
+    assert(upd.status === 200, `display name and username update together (HTTP ${upd.status})`);
+    assertEqual(upd.data?.user?.username, newName, 'username was changed');
+    assertEqual(upd.data?.user?.playerId, originalPlayerId, 'Player ID is UNCHANGED by a username change');
+
+    // Duplicate username is rejected.
+    const dupe = await patch('/api/auth/profile', { username: `alice_${stamp}` }, accounts.carol.token);
+    assertEqual(dupe.status, 409, 'taking an existing username is rejected with 409');
+
+    // Invalid usernames are rejected.
+    const bad = await patch('/api/auth/profile', { username: 'ab' }, accounts.carol.token);
+    assertEqual(bad.status, 400, 'too-short username rejected');
+    const badChars = await patch('/api/auth/profile', { username: 'has spaces!' }, accounts.carol.token);
+    assertEqual(badChars.status, 400, 'username with illegal characters rejected');
+
+    // The new username actually works for signing in.
+    const relog = await post('/api/auth/login', { username: newName, password: 'correct-horse-battery' });
+    assert(relog.status === 200 && !!relog.data?.token, 'can sign in with the NEW username');
+    accounts.carol.token = relog.data.token;
+    renamedUsername = newName;
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('Password change without the old password');
+
+  {
+    const oldToken = accounts.carol.token;
+
+    // Weak passwords are refused.
+    const weak = await post('/api/auth/password', { newPassword: '123' }, oldToken);
+    assertEqual(weak.status, 400, 'password shorter than 6 characters is rejected');
+
+    // Unauthenticated callers cannot change anyone's password.
+    const anon = await post('/api/auth/password', { newPassword: 'brand-new-pass-1' });
+    assertEqual(anon.status, 401, 'password change requires authentication');
+
+    // The real change — note NO current password is supplied.
+    const changed = await post('/api/auth/password', { newPassword: 'brand-new-pass-1' }, oldToken);
+    assert(changed.status === 200, `password changed without the old one (HTTP ${changed.status})`);
+    assert(!!changed.data?.token, 'a fresh token is returned so this device stays signed in');
+    const freshToken = changed.data.token;
+
+    // Old sessions must die.
+    const withOld = await get('/api/auth/me', oldToken);
+    assertEqual(withOld.status, 401, 'the PREVIOUS token is now rejected (other devices signed out)');
+
+    const withFresh = await get('/api/auth/me', freshToken);
+    assertEqual(withFresh.status, 200, 'the freshly issued token still works');
+
+    // A socket using the stale token must also be refused.
+    const staleSock = await connect({ token: oldToken });
+    assert(!!staleSock.error, `stale token cannot open a socket (${staleSock.error})`);
+    staleSock.socket.close();
+
+    const freshSock = await connect({ token: freshToken });
+    assert(!freshSock.error, 'the fresh token can open a socket');
+    freshSock.socket.close();
+
+    // Old password must no longer work; the new one must.
+    const oldPw = await post('/api/auth/login', { username: renamedUsername, password: 'correct-horse-battery' });
+    assertEqual(oldPw.status, 401, 'the OLD password no longer signs in');
+    const newPw = await post('/api/auth/login', { username: renamedUsername, password: 'brand-new-pass-1' });
+    assertEqual(newPw.status, 200, 'the NEW password signs in');
   }
 
   /* ---------------------------------------------------------------- */

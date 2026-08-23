@@ -9,6 +9,8 @@ import {
   findUserById,
   findUserByPlayerId,
   updateUserProfile,
+  updateUsername,
+  updatePassword,
   getFriendsList,
   sendFriendRequest,
   respondFriendRequest,
@@ -86,6 +88,21 @@ export interface AuthRequest extends Request {
   };
 }
 
+
+/**
+ * True when a token was issued BEFORE the account's password last changed.
+ *
+ * JWTs cannot be revoked individually, so this timestamp comparison is what
+ * actually signs other devices out on a password change. `iat` is in seconds.
+ */
+export function isTokenStale(decoded: any, user: any): boolean {
+  if (!user?.passwordChangedAt || !decoded?.iat) return false;
+  const changedAt = new Date(user.passwordChangedAt).getTime();
+  if (Number.isNaN(changedAt)) return false;
+  // Allow 1s of slack so a token minted in the same second as the change survives.
+  return decoded.iat * 1000 < changedAt - 1000;
+}
+
 export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -97,6 +114,9 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
     const user = await findUserById(decoded.id);
     if (!user) {
       return res.status(401).json({ error: 'User no longer exists.' });
+    }
+    if (isTokenStale(decoded, user)) {
+      return res.status(401).json({ error: 'Session expired because the password was changed.' });
     }
     req.user = {
       id: user.id,
@@ -244,15 +264,88 @@ router.patch('/auth/profile', profileLimiter, requireAuth, async (req: AuthReque
       updates.avatar = avatar;
     }
 
-    if (Object.keys(updates).length === 0) {
+    const { username } = req.body ?? {};
+    let renamed: any = null;
+
+    if (username !== undefined) {
+      if (typeof username !== 'string') {
+        return res.status(400).json({ error: 'Username must be text.' });
+      }
+      const clean = username.trim().toLowerCase();
+      if (clean.length < 3 || clean.length > 20) {
+        return res.status(400).json({ error: 'Username must be 3-20 characters.' });
+      }
+      if (!/^[a-z0-9_.]+$/.test(clean)) {
+        return res.status(400).json({ error: 'Username can only contain letters, numbers, dots and underscores.' });
+      }
+      if (clean !== req.user!.username) {
+        renamed = await updateUsername(req.user!.id, clean);
+        if (!renamed) {
+          return res.status(409).json({ error: 'That username is already taken.' });
+        }
+      }
+    }
+
+    if (Object.keys(updates).length === 0 && !renamed) {
       return res.status(400).json({ error: 'Nothing to update.' });
     }
 
-    const updated = await updateUserProfile(req.user!.id, updates);
+    const updated = Object.keys(updates).length
+      ? await updateUserProfile(req.user!.id, updates)
+      : renamed;
     res.json({ user: updated });
   } catch (err) {
     console.error('Profile update error:', err);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+/**
+ * POST /api/auth/password  — change the signed-in user's password.
+ *
+ * By product decision the CURRENT password is not required: being signed in is
+ * treated as sufficient proof. The trade-off is that anyone who gets hold of a
+ * live session can take the account over, so two things compensate:
+ *   1. password_changed_at invalidates every token issued before the change,
+ *      signing out all other devices immediately;
+ *   2. a fresh token is returned so the caller's own session keeps working.
+ */
+router.post('/auth/password', profileLimiter, requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { newPassword } = req.body ?? {};
+
+    if (typeof newPassword !== 'string') {
+      return res.status(400).json({ error: 'A new password is required.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+    if (newPassword.length > 200) {
+      return res.status(400).json({ error: 'Password is too long.' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const result = await updatePassword(req.user!.id, passwordHash);
+    if (!result) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Issue a replacement token so this device stays signed in while every
+    // other outstanding token is now stale.
+    const token = jwt.sign(
+      { id: req.user!.id, username: req.user!.username, playerId: req.user!.playerId },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+    );
+
+    res.json({
+      success: true,
+      token,
+      message: 'Password updated. You have been signed out on all other devices.',
+    });
+  } catch (err) {
+    console.error('Password change error:', err);
+    res.status(500).json({ error: 'Failed to change password.' });
   }
 });
 
