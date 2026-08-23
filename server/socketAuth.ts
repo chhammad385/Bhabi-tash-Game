@@ -1,0 +1,134 @@
+import { Socket } from 'socket.io';
+import { GameEngine } from './game/GameEngine';
+
+export interface SocketUser {
+  id: string;
+  playerId: string;
+  username: string;
+  displayName: string;
+  avatar: string;
+}
+
+export interface AuthenticatedSocket extends Socket {
+  user?: SocketUser;
+  currentRoomCode?: string;
+  /** Per-socket sliding-window counters for event rate limiting. */
+  rateBuckets?: Map<string, number[]>;
+}
+
+/* ------------------------------------------------------------------ *
+ * Per-socket event rate limiting
+ * ------------------------------------------------------------------ */
+
+export interface RateRule {
+  /** Max events allowed inside the window. */
+  max: number;
+  /** Window length in milliseconds. */
+  windowMs: number;
+}
+
+/**
+ * Limits are deliberately generous for normal play. Card plays and
+ * acknowledgements happen at human speed; the tight limits are on the
+ * events that were abusable (invites, chat, transfers, matchmaking).
+ */
+export const RATE_RULES: Record<string, RateRule> = {
+  'room:create': { max: 10, windowMs: 60_000 },
+  'room:join': { max: 20, windowMs: 60_000 },
+  'room:rejoin': { max: 20, windowMs: 60_000 },
+  'room:leave': { max: 20, windowMs: 60_000 },
+  'room:toggle_ready': { max: 30, windowMs: 60_000 },
+  'room:update_settings': { max: 30, windowMs: 60_000 },
+  'room:add_bot': { max: 20, windowMs: 60_000 },
+  'room:kick_player': { max: 20, windowMs: 60_000 },
+  'game:start': { max: 10, windowMs: 60_000 },
+  'game:play_card': { max: 60, windowMs: 60_000 },
+  'game:pull_card': { max: 30, windowMs: 60_000 },
+  'game:acknowledge_trick': { max: 60, windowMs: 60_000 },
+  'game:request_card_transfer': { max: 5, windowMs: 60_000 },
+  'game:respond_card_transfer': { max: 20, windowMs: 60_000 },
+  'game:play_again': { max: 10, windowMs: 60_000 },
+  'matchmaking:join': { max: 10, windowMs: 60_000 },
+  'matchmaking:leave': { max: 20, windowMs: 60_000 },
+  'chat:send': { max: 15, windowMs: 30_000 },
+  'friend:invite_to_game': { max: 5, windowMs: 60_000 },
+  'voice:join': { max: 10, windowMs: 60_000 },
+  'voice:leave': { max: 10, windowMs: 60_000 },
+  'voice:mute': { max: 60, windowMs: 60_000 },
+  'voice:speaking': { max: 400, windowMs: 60_000 },
+  'voice:offer': { max: 60, windowMs: 60_000 },
+  'voice:answer': { max: 60, windowMs: 60_000 },
+  'voice:ice_candidate': { max: 300, windowMs: 60_000 },
+};
+
+/**
+ * Returns true when the event is allowed. Uses a simple sliding window of
+ * timestamps held on the socket, so buckets die with the connection.
+ */
+export function allowEvent(socket: AuthenticatedSocket, event: string): boolean {
+  const rule = RATE_RULES[event];
+  if (!rule) return true;
+
+  if (!socket.rateBuckets) socket.rateBuckets = new Map();
+  const now = Date.now();
+  const cutoff = now - rule.windowMs;
+
+  const hits = (socket.rateBuckets.get(event) || []).filter(t => t > cutoff);
+  if (hits.length >= rule.max) {
+    socket.rateBuckets.set(event, hits);
+    return false;
+  }
+
+  hits.push(now);
+  socket.rateBuckets.set(event, hits);
+  return true;
+}
+
+/* ------------------------------------------------------------------ *
+ * Authorization helpers
+ * ------------------------------------------------------------------ */
+
+export interface RoomContext {
+  engine: GameEngine;
+  roomCode: string;
+  user: SocketUser;
+}
+
+export type Guard<T> = { ok: true; value: T } | { ok: false; error: string };
+
+/**
+ * Resolves the room this socket is in AND verifies the authenticated user is
+ * actually a seated player in that game. `socket.currentRoomCode` alone is not
+ * trusted as proof of membership.
+ */
+export function requireRoomMembership(
+  socket: AuthenticatedSocket,
+  activeGames: Map<string, GameEngine>
+): Guard<RoomContext> {
+  const user = socket.user;
+  if (!user) return { ok: false, error: 'Not authenticated.' };
+
+  const roomCode = socket.currentRoomCode;
+  if (!roomCode) return { ok: false, error: 'You are not in a game room.' };
+
+  const engine = activeGames.get(roomCode);
+  if (!engine) return { ok: false, error: 'Game room no longer exists.' };
+
+  const isMember = engine.players.some(p => p.userId === user.id);
+  if (!isMember) return { ok: false, error: 'You are not a player in this game.' };
+
+  return { ok: true, value: { engine, roomCode, user } };
+}
+
+/** Same as above but additionally requires the user to be the host. */
+export function requireHost(
+  socket: AuthenticatedSocket,
+  activeGames: Map<string, GameEngine>
+): Guard<RoomContext> {
+  const ctx = requireRoomMembership(socket, activeGames);
+  if (!ctx.ok) return ctx;
+  if (ctx.value.engine.hostId !== ctx.value.user.id) {
+    return { ok: false, error: 'Only the host can do that.' };
+  }
+  return ctx;
+}

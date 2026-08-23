@@ -1,0 +1,6 @@
+{
+  "name": "Bhabhi Multiplayer Card Game",
+  "description": "Online multiplayer Bhabhi card game with real-time Socket.IO synchronization, WebRTC voice chat, server-authoritative game engine, smart bots, and room lobbies.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
