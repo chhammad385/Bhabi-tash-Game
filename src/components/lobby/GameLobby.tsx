@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Play, UserPlus, Bot, Settings, LogOut, Check, Copy, Share2, Crown, Mic, ShieldAlert } from 'lucide-react';
+import { VoiceControls, VoiceErrorBanner } from '../common/VoiceControls';
+import { Play, UserPlus, Bot, Settings, LogOut, Check, Copy, Share2, Crown, Mic, ShieldAlert, MicOff } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -19,6 +20,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ onOpenFriends }) => {
     updateSettings,
     errorMessage,
     setErrorMessage,
+    peerSpeaking,
   } = useGame();
 
   const [copiedCode, setCopiedCode] = useState(false);
@@ -135,6 +137,22 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ onOpenFriends }) => {
         </div>
       )}
 
+      {/* Voice: available while players are still taking their seats. */}
+      <div className="rounded-2xl bg-slate-900/60 border border-slate-800 p-4 sm:p-5 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Voice Chat</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+              <strong className="text-slate-400">Mic</strong> sends your voice to the others.{' '}
+              <strong className="text-slate-400">Speaker</strong> lets you hear them. They work
+              independently — you can listen with your mic off.
+            </p>
+          </div>
+          <VoiceControls variant="full" className="shrink-0" />
+        </div>
+        <VoiceErrorBanner />
+      </div>
+
       {/* Players Seat Grid (3 to 12 seats) */}
       <div className="rounded-2xl bg-slate-900/60 border border-slate-800 p-6">
         <div className="flex items-center justify-between mb-4">
@@ -205,6 +223,29 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ onOpenFriends }) => {
                   <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-xl font-bold text-amber-400">
                     {player.isBot ? '🤖' : player.displayName.charAt(0).toUpperCase()}
                   </div>
+
+                  {/* Talking right now */}
+                  {(peerSpeaking[player.userId] || player.speaking) && (
+                    <span className="absolute -inset-1 rounded-full border-2 border-emerald-400 animate-ping pointer-events-none" />
+                  )}
+
+                  {/* In voice but not transmitting */}
+                  {!player.isBot && player.voiceConnected && !player.micOn && (
+                    <span
+                      title={`${player.displayName} has their mic off`}
+                      className="absolute -bottom-0.5 -right-0.5 p-1 rounded-full bg-slate-800 border border-slate-600 text-slate-400"
+                    >
+                      <MicOff className="w-3 h-3" />
+                    </span>
+                  )}
+                  {!player.isBot && player.micOn && (
+                    <span
+                      title={`${player.displayName} has their mic on`}
+                      className="absolute -bottom-0.5 -right-0.5 p-1 rounded-full bg-emerald-900 border border-emerald-600 text-emerald-300"
+                    >
+                      <Mic className="w-3 h-3" />
+                    </span>
+                  )}
                 </div>
 
                 <div className="w-full">

@@ -27,6 +27,12 @@ export interface PublicPlayer {
   isReady: boolean;
   isBhabhi?: boolean;
   connected: boolean;
+  /** Connected to the room's voice mesh (no microphone implied). */
+  voiceConnected?: boolean;
+  /** Transmitting — other players can hear this player. */
+  micOn?: boolean;
+  /** Currently detected as talking (drives the speaking ring). */
+  speaking?: boolean;
 }
 
 export interface PlayedTrickCard {

@@ -13,6 +13,7 @@ import {
   UserCheck,
   History,
   Handshake,
+  Mic,
 } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 import { useAuth } from '../../context/AuthContext';
@@ -28,6 +29,7 @@ import {
   sortCardsByUserConfig,
 } from './SuitArrangementSelector';
 import { SarHistoryModal } from './SarHistoryModal';
+import { VoiceControls, VoiceErrorBanner } from '../common/VoiceControls';
 
 export const GameTable: React.FC = () => {
   const { user } = useAuth();
@@ -45,6 +47,7 @@ export const GameTable: React.FC = () => {
     markChatRead,
     errorMessage,
     setErrorMessage,
+    peerSpeaking,
   } = useGame();
 
   const [showChat, setShowChat] = useState(false);
@@ -258,6 +261,8 @@ export const GameTable: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <VoiceControls variant="compact" />
+
           {/* Sar History Audit Button */}
           <button
             id="table-sar-history-btn"
@@ -329,6 +334,17 @@ export const GameTable: React.FC = () => {
               >
                 {/* Avatar */}
                 <div className="relative shrink-0">
+                  {(peerSpeaking[opponent.userId] || opponent.speaking) && (
+                    <span className="absolute -inset-1 rounded-full border-2 border-emerald-400 animate-ping pointer-events-none z-10" />
+                  )}
+                  {!opponent.isBot && opponent.micOn && (
+                    <span
+                      title={`${opponent.displayName} has their mic on`}
+                      className="absolute -bottom-1 -right-1 z-20 p-0.5 rounded-full bg-emerald-900 border border-emerald-600 text-emerald-300"
+                    >
+                      <Mic className="w-2.5 h-2.5" />
+                    </span>
+                  )}
                   <div
                     className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold bg-slate-800 text-amber-300 border ${
                       isTurn

@@ -39,6 +39,8 @@ async function startServer() {
               imgSrc: ["'self'", 'data:', 'blob:'],
               // API + WebSocket.
               connectSrc: ["'self'", 'ws:', 'wss:', 'https:'],
+              // Remote peer audio arrives as a blob-backed MediaStream.
+              mediaSrc: ["'self'", 'blob:', 'mediastream:'],
               objectSrc: ["'none'"],
               frameAncestors: ["'none'"],
               baseUri: ["'self'"],

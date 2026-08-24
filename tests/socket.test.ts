@@ -591,6 +591,132 @@ export async function runSocketTests() {
   }
 
   /* ---------------------------------------------------------------- */
+  section('Voice: mesh membership and signalling authorization');
+
+  {
+    const h = (await connect({ token: accounts.alice.token })).socket;
+    const g = (await connect({ token: accounts.bob.token })).socket;
+    const outsiderReg = await post('/api/auth/register', {
+      username: `vout_${stamp.toString(36).slice(-5)}`,
+      password: 'correct-horse-battery',
+      displayName: 'vout',
+    });
+    const o = (await connect({ token: outsiderReg.data.token })).socket;
+
+    let hState: any = null;
+    let gState: any = null;
+    h.on('game:state_update', (x: any) => { hState = x; });
+    g.on('game:state_update', (x: any) => { gState = x; });
+
+    const r = await emit(h, 'room:create', { settings: {} });
+    await emit(g, 'room:join', { roomCode: r.roomCode });
+    await new Promise(res => setTimeout(res, 250));
+
+    // Joining the mesh must not imply a live microphone.
+    const jh = await emit(h, 'voice:join');
+    assert(jh.success, 'host joins the voice mesh');
+    const jg = await emit(g, 'voice:join');
+    assert(jg.success, 'second player joins the voice mesh');
+    await new Promise(res => setTimeout(res, 300));
+
+    const meH = hState.players.find((p: any) => p.userId === accounts.alice.id);
+    assertEqual(meH?.voiceConnected, true, 'player is marked connected to voice');
+    assertEqual(meH?.micOn, false, 'joining voice does NOT turn the microphone on');
+
+    // Signalling is only relayed between peers in the same room.
+    const okOffer = await emit(h, 'voice:offer', { to: accounts.bob.id, offer: { sdp: 'x' } });
+    assert(okOffer.success, 'signalling is relayed between two peers in the same room');
+
+    const crossRoom = await emit(o, 'voice:offer', { to: accounts.alice.id, offer: { sdp: 'x' } });
+    assert(!crossRoom.success, 'an outsider cannot send signalling into the room');
+
+    const spy = nextEvent(h, 'voice:offer', 1200);
+    o.emit('voice:offer', { to: accounts.alice.id, offer: { sdp: 'x' } });
+    assertEqual(await spy, null, 'the refused offer is never delivered');
+
+    h.close(); g.close(); o.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('Voice: the mic flag never gates delivery');
+
+  {
+    const a = (await connect({ token: accounts.alice.token })).socket;
+    const b = (await connect({ token: accounts.bob.token })).socket;
+
+    let aState: any = null;
+    let bState: any = null;
+    a.on('game:state_update', (x: any) => { aState = x; });
+    b.on('game:state_update', (x: any) => { bState = x; });
+
+    const r = await emit(a, 'room:create', { settings: {} });
+    await emit(b, 'room:join', { roomCode: r.roomCode });
+    await emit(a, 'voice:join');
+    await emit(b, 'voice:join');
+    await new Promise(res => setTimeout(res, 300));
+
+    // A turns its mic ON, B leaves its mic OFF.
+    await emit(a, 'voice:mic_state', { micOn: true });
+    await new Promise(res => setTimeout(res, 300));
+
+    const aSeenByB = bState.players.find((p: any) => p.userId === accounts.alice.id);
+    const bSeenByB = bState.players.find((p: any) => p.userId === accounts.bob.id);
+    assertEqual(aSeenByB?.micOn, true, "B can see that A's mic is on");
+    assertEqual(bSeenByB?.micOn, false, "B's own mic stays off");
+
+    /*
+     * The important guarantee: B has the mic OFF, yet signalling to and from B
+     * still works, so B can still RECEIVE audio. Nothing about the speaker is
+     * conditioned on the microphone.
+     */
+    const toB = await emit(a, 'voice:offer', { to: accounts.bob.id, offer: { sdp: 'x' } });
+    assert(toB.success, 'a player with the mic OFF can still receive signalling (listen-only works)');
+
+    const fromB = await emit(b, 'voice:answer', { to: accounts.alice.id, answer: { sdp: 'x' } });
+    assert(fromB.success, 'a player with the mic OFF can still answer, so the connection completes');
+
+    const iceFromB = await emit(b, 'voice:ice_candidate', {
+      to: accounts.alice.id,
+      candidate: { candidate: 'x' },
+    });
+    assert(iceFromB.success, 'ICE from a mic-off player is relayed');
+
+    // Turning the mic back off is reflected and clears the speaking flag.
+    await emit(a, 'voice:speaking', { speaking: true });
+    await emit(a, 'voice:mic_state', { micOn: false });
+    await new Promise(res => setTimeout(res, 300));
+    const aAfter = bState.players.find((p: any) => p.userId === accounts.alice.id);
+    assertEqual(aAfter?.micOn, false, 'turning the mic off is reflected to the other players');
+    assertEqual(aAfter?.speaking, false, 'the speaking indicator clears when the mic goes off');
+
+    a.close(); b.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('Voice: leaving the room drops the voice channel');
+
+  {
+    const a = (await connect({ token: accounts.alice.token })).socket;
+    const b = (await connect({ token: accounts.bob.token })).socket;
+    let bState: any = null;
+    b.on('game:state_update', (x: any) => { bState = x; });
+
+    const r = await emit(a, 'room:create', { settings: {} });
+    await emit(b, 'room:join', { roomCode: r.roomCode });
+    await emit(a, 'voice:join');
+    await emit(b, 'voice:join');
+    await new Promise(res => setTimeout(res, 300));
+
+    const goneEvent = nextEvent(b, 'voice:peer_left', 3000);
+    await emit(a, 'room:leave');
+    const gone = await goneEvent;
+    assert(gone !== null, 'peers are told when somebody leaves the room');
+    assertEqual(gone?.peerId, accounts.alice.id, 'the correct peer id is announced');
+
+    a.close(); b.close();
+  }
+
+  /* ---------------------------------------------------------------- */
   section('REST brute-force protection');
 
   {

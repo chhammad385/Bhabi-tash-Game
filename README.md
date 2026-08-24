@@ -32,6 +32,27 @@ Vercel (frontend) + Render (backend) + Neon PostgreSQL (database).
 Three difficulty levels (easy / normal / hard) with heuristic play: void-suit
 management, safe discarding, and Tochoo avoidance.
 
+### Voice chat (WebRTC)
+
+Two independent controls, shown in both the lobby and at the table:
+
+| Control | What it does | What it does NOT do |
+|---|---|---|
+| **Mic** | Sends your voice to the others | Does not affect what you hear |
+| **Speaker** | Lets you hear the others | Does not affect what they hear |
+
+Every combination is valid — listen-only (mic off, speaker on) and talk-only
+(mic on, speaker off) both work. Neither control gates the other.
+
+- The room's peer mesh is joined automatically on entering a room, without the
+  microphone and without a permission prompt, so both toggles act instantly.
+- `getUserMedia` runs only when the mic button is pressed, so the browser
+  permission prompt always follows a deliberate action.
+- Toggling the mic swaps the track with `replaceTrack()`, which needs no
+  renegotiation and cannot desync a live peer.
+- Free Google/Cloudflare STUN only; there is no TURN server, so players behind
+  very restrictive networks see a dismissible notice. The game is unaffected.
+
 ### Social & stats
 - Unique public Player IDs (e.g. `BHABHI-7K29X`) for friend requests.
 - Friends list with presence, and **friends-only** game invitations.

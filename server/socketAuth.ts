@@ -52,6 +52,14 @@ export const RATE_RULES: Record<string, RateRule> = {
   'matchmaking:leave': { max: 20, windowMs: 60_000 },
   'chat:send': { max: 15, windowMs: 30_000 },
   'friend:invite_to_game': { max: 5, windowMs: 60_000 },
+  // Voice: signalling is chatty by nature, so these are deliberately loose.
+  'voice:join': { max: 20, windowMs: 60_000 },
+  'voice:leave': { max: 20, windowMs: 60_000 },
+  'voice:mic_state': { max: 60, windowMs: 60_000 },
+  'voice:speaking': { max: 400, windowMs: 60_000 },
+  'voice:offer': { max: 80, windowMs: 60_000 },
+  'voice:answer': { max: 80, windowMs: 60_000 },
+  'voice:ice_candidate': { max: 400, windowMs: 60_000 },
 };
 
 /**

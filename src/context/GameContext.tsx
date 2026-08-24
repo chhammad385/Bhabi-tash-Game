@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { Socket } from 'socket.io-client';
 import { SanitizedPlayerView, ChatMessage, GameInvitationNotification, GameSettings } from '../types/game';
 import { getSocket, getExistingSocket } from '../lib/socket';
+import { WebRTCVoiceManager, VoiceState } from '../lib/webrtc';
 import { sounds } from '../lib/audio';
 import { useAuth } from './AuthContext';
 
@@ -15,6 +16,22 @@ interface GameContextType {
   chatMessages: ChatMessage[];
   unreadChatCount: number;
   activeInvite: GameInvitationNotification | null;
+
+  /* Voice. Mic and speaker are independent: neither gates the other. */
+  /** Am I transmitting? Controls only whether OTHERS hear ME. */
+  isMicOn: boolean;
+  /** Am I playing incoming audio? Controls only whether I hear OTHERS. */
+  isSpeakerOn: boolean;
+  /** My own mic is picking up speech right now. */
+  isSpeaking: boolean;
+  voiceStatus: VoiceState['status'];
+  voiceError: string | null;
+  voicePeerCount: number;
+  /** peerId -> currently talking. */
+  peerSpeaking: Record<string, boolean>;
+  toggleMic: () => Promise<boolean>;
+  toggleSpeaker: () => void;
+  dismissVoiceError: () => void;
   /** Unseen incoming friend requests, shown as a badge on the Friends button. */
   friendRequestCount: number;
   markFriendRequestsSeen: () => void;
@@ -55,6 +72,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [activeInvite, setActiveInvite] = useState<GameInvitationNotification | null>(null);
   const [friendRequestCount, setFriendRequestCount] = useState(0);
+
+  const [voice, setVoice] = useState<VoiceState>({
+    status: 'idle',
+    micOn: false,
+    speakerOn: true,
+    speaking: false,
+    peerCount: 0,
+    error: null,
+  });
+  const [peerSpeaking, setPeerSpeaking] = useState<Record<string, boolean>>({});
+  const voiceRef = useRef<WebRTCVoiceManager | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isMatchmaking, setIsMatchmaking] = useState(false);
   const [matchmakingTarget, setMatchmakingTarget] = useState(4);
@@ -115,6 +143,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+
+    // Voice manager lives for as long as the socket does.
+    voiceRef.current = new WebRTCVoiceManager(socket, {
+      onChange: (s) => setVoice(s),
+      onPeerSpeaking: (peerId, speaking) =>
+        setPeerSpeaking((prev) => ({ ...prev, [peerId]: speaking })),
+    });
 
     // Socket Event Listeners
     socket.on('game:state_update', (state: SanitizedPlayerView) => {
@@ -234,6 +269,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
+      voiceRef.current?.destroy();
+      voiceRef.current = null;
       socket.off('connect', handleReconnect);
       socket.off('game:state_update');
       socket.off('chat:message');
@@ -243,6 +280,34 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('matchmaking:matched');
     };
   }, [user, token]);
+
+  /*
+   * Join the voice mesh as soon as the player is in a room, and leave when
+   * they are not. This happens without the microphone and without a
+   * permission prompt, so the mic and speaker buttons act instantly instead
+   * of waiting for a connection the first time they are pressed.
+   */
+  useEffect(() => {
+    const vm = voiceRef.current;
+    if (!vm) return;
+    if (gameState?.roomCode) vm.join();
+    else vm.leave();
+  }, [gameState?.roomCode]);
+
+  const toggleMic = async (): Promise<boolean> => {
+    const vm = voiceRef.current;
+    if (!vm) return false;
+    return vm.toggleMic();
+  };
+
+  /** Never touches the mic — works exactly the same whether the mic is on or off. */
+  const toggleSpeaker = () => {
+    voiceRef.current?.toggleSpeaker();
+  };
+
+  const dismissVoiceError = () => {
+    setVoice((v) => ({ ...v, error: null }));
+  };
 
   const markChatRead = () => {
     setUnreadChatCount(0);
@@ -404,6 +469,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         chatMessages,
         unreadChatCount,
         activeInvite,
+        isMicOn: voice.micOn,
+        isSpeakerOn: voice.speakerOn,
+        isSpeaking: voice.speaking,
+        voiceStatus: voice.status,
+        voiceError: voice.error,
+        voicePeerCount: voice.peerCount,
+        peerSpeaking,
+        toggleMic,
+        toggleSpeaker,
+        dismissVoiceError,
         friendRequestCount,
         markFriendRequestsSeen: () => setFriendRequestCount(0),
         toastMessage,

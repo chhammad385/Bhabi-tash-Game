@@ -190,6 +190,9 @@ export class GameEngine {
       isReady: isHost, // Host is ready by default
       connected: true,
       socketId: user.socketId,
+      voiceConnected: false,
+      micOn: false,
+      speaking: false,
     };
 
     this.players.push(newPlayer);
@@ -230,6 +233,9 @@ export class GameEngine {
 
     player.connected = false;
     player.status = 'disconnected';
+    player.voiceConnected = false;
+    player.micOn = false;
+    player.speaking = false;
 
     if (player.disconnectTimeout) clearTimeout(player.disconnectTimeout);
     player.disconnectTimeout = setTimeout(() => {
@@ -1538,6 +1544,9 @@ export class GameEngine {
       isReady: p.isReady,
       isBhabhi: p.isBhabhi,
       connected: p.connected,
+      voiceConnected: p.voiceConnected,
+      micOn: p.micOn,
+      speaking: p.speaking,
     }));
 
     return {
