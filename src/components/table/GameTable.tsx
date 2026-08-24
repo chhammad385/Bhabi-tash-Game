@@ -48,11 +48,13 @@ export const GameTable: React.FC = () => {
     unreadChatCount,
     markChatRead,
     isVoiceConnected,
-    isMicMuted,
+    isMicOn,
+    isSpeakerOn,
     isSpeaking,
     peerSpeaking,
     joinVoiceChat,
     toggleMic,
+    toggleSpeaker,
     leaveVoiceChat,
     errorMessage,
     setErrorMessage,
@@ -242,29 +244,56 @@ export const GameTable: React.FC = () => {
                   id="table-join-voice-btn"
                   onClick={joinVoiceChat}
                   className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition"
+                  title="Connect to voice chat"
                 >
-                  <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                  <Volume2 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                   <span className="hidden sm:inline">Join Voice</span>
                 </button>
               ) : (
                 <div className="flex items-center gap-1">
+                  {/* MIC — controls whether the others hear YOU */}
                   <button
                     id="table-toggle-mic-btn"
                     onClick={toggleMic}
+                    aria-pressed={isMicOn}
                     className={`p-1 sm:p-1.5 rounded-lg border text-xs font-semibold transition ${
-                      isMicMuted
-                        ? 'bg-rose-950/60 text-rose-300 border-rose-800'
-                        : 'bg-emerald-950/60 text-emerald-300 border-emerald-800 animate-pulse'
+                      isMicOn
+                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700 animate-pulse'
+                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
                     }`}
-                    title={isMicMuted ? 'Unmute' : 'Mute'}
+                    title={isMicOn ? 'Mic on - others can hear you' : 'Mic off - others cannot hear you'}
                   >
-                    {isMicMuted ? <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" /> : <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5" />}
+                    {isMicOn ? (
+                      <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                    ) : (
+                      <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                    )}
                   </button>
+
+                  {/* SPEAKER — controls whether YOU hear the others */}
+                  <button
+                    id="table-toggle-speaker-btn"
+                    onClick={toggleSpeaker}
+                    aria-pressed={isSpeakerOn}
+                    className={`p-1 sm:p-1.5 rounded-lg border text-xs font-semibold transition ${
+                      isSpeakerOn
+                        ? 'bg-indigo-950/60 text-indigo-300 border-indigo-700'
+                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                    }`}
+                    title={isSpeakerOn ? 'Speaker on - you can hear others' : 'Speaker off - you cannot hear others'}
+                  >
+                    {isSpeakerOn ? (
+                      <Volume2 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                    ) : (
+                      <VolumeX className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                    )}
+                  </button>
+
                   <button
                     id="table-leave-voice-btn"
                     onClick={leaveVoiceChat}
                     className="p-1 sm:p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400 text-xs transition"
-                    title="Leave Voice"
+                    title="Disconnect from voice"
                   >
                     ✕
                   </button>

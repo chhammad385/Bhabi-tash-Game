@@ -24,7 +24,10 @@ interface GameContextType {
   dismissToast: () => void;
   voiceManager: WebRTCVoiceManager | null;
   isVoiceConnected: boolean;
-  isMicMuted: boolean;
+  /** True while transmitting — i.e. other players can hear you. */
+  isMicOn: boolean;
+  /** True while playing incoming audio — i.e. you can hear other players. */
+  isSpeakerOn: boolean;
   isSpeaking: boolean;
   peerSpeaking: Record<string, boolean>;
   errorMessage: string | null;
@@ -47,7 +50,9 @@ interface GameContextType {
   cancelMatchmaking: () => void;
   sendChatMessage: (text: string) => void;
   joinVoiceChat: () => Promise<boolean>;
-  toggleMic: () => void;
+  /** Requests mic permission on first use; toggles transmission thereafter. */
+  toggleMic: () => Promise<boolean>;
+  toggleSpeaker: () => void;
   leaveVoiceChat: () => void;
   dismissInvite: () => void;
   acceptInvite: (invite: GameInvitationNotification) => void;
@@ -72,7 +77,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // WebRTC Voice State
   const [isVoiceConnected, setIsVoiceConnected] = useState(false);
-  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isMicOn, setIsMicOn] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [peerSpeaking, setPeerSpeaking] = useState<Record<string, boolean>>({});
 
@@ -132,6 +138,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Init WebRTC Manager
     voiceManagerRef.current = new WebRTCVoiceManager(socket, {
+      onStateChange: () => {
+        const vm = voiceManagerRef.current;
+        if (!vm) return;
+        setIsVoiceConnected(vm.isJoined);
+        setIsMicOn(vm.micOn);
+        setIsSpeakerOn(vm.speakerOn);
+      },
       onSpeakingChange: (speaking) => setIsSpeaking(speaking),
       onPeerSpeakingChange: (peerId, speaking) => {
         setPeerSpeaking((prev) => ({ ...prev, [peerId]: speaking }));
@@ -419,25 +432,30 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     emitWithAck('chat:send', { text }).then(reportIfFailed);
   };
 
+  /** Connect to the room's voice mesh. Does NOT touch the microphone. */
   const joinVoiceChat = async (): Promise<boolean> => {
     if (!voiceManagerRef.current) return false;
-    const ok = await voiceManagerRef.current.joinVoice();
-    setIsVoiceConnected(ok);
-    setIsMicMuted(false);
-    return ok;
+    return voiceManagerRef.current.joinVoice();
   };
 
-  const toggleMic = () => {
+  /**
+   * Mic controls whether others hear YOU. The first press asks the browser for
+   * microphone permission; after that it just starts/stops transmitting.
+   */
+  const toggleMic = async (): Promise<boolean> => {
+    if (!voiceManagerRef.current) return false;
+    return voiceManagerRef.current.toggleMic();
+  };
+
+  /** Speaker controls whether YOU hear the others. Never touches the mic. */
+  const toggleSpeaker = () => {
     if (!voiceManagerRef.current) return;
-    const muted = voiceManagerRef.current.toggleMute();
-    setIsMicMuted(muted);
+    voiceManagerRef.current.toggleSpeaker();
   };
 
   const leaveVoiceChat = () => {
     if (!voiceManagerRef.current) return;
     voiceManagerRef.current.leaveVoice();
-    setIsVoiceConnected(false);
-    setIsMicMuted(false);
   };
 
   const dismissInvite = () => {
@@ -474,7 +492,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dismissToast: () => setToastMessage(null),
         voiceManager: voiceManagerRef.current,
         isVoiceConnected,
-        isMicMuted,
+        isMicOn,
+        isSpeakerOn,
         isSpeaking,
         peerSpeaking,
         errorMessage,
@@ -498,6 +517,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendChatMessage,
         joinVoiceChat,
         toggleMic,
+        toggleSpeaker,
         leaveVoiceChat,
         dismissInvite,
         acceptInvite,

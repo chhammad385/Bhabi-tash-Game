@@ -515,6 +515,106 @@ export async function runSocketTests() {
   }
 
   /* ---------------------------------------------------------------- */
+  section('Leaving a game mid-play actually vacates the seat');
+
+  {
+    const h = (await connect({ token: accounts.alice.token })).socket;
+    const g = (await connect({ token: accounts.bob.token })).socket;
+
+    let gState: any = null;
+    let gUpdatesAfterLeave = 0;
+    // Only count frames that arrive once the server has CONFIRMED the leave.
+    // The bot keeps playing while the request is in flight, and those earlier
+    // broadcasts are legitimately still addressed to a seated player.
+    let hasLeft = false;
+    g.on('game:state_update', (x: any) => {
+      gState = x;
+      if (hasLeft) gUpdatesAfterLeave++;
+    });
+
+    const r = await emit(h, 'room:create', { settings: { turnTimer: 15 } });
+    await emit(h, 'room:add_bot', { difficulty: 'easy' });
+    await emit(g, 'room:join', { roomCode: r.roomCode });
+    await emit(g, 'room:toggle_ready');
+    await new Promise(res => setTimeout(res, 250));
+    const started = await emit(h, 'game:start');
+    assert(started.success, 'a game is in progress');
+
+    const { activeGames } = await import('../server/socket');
+    const engine: any = activeGames.get(r.roomCode);
+    assert(
+      engine.players.some((p: any) => p.userId === accounts.bob.id),
+      'the leaver is seated before leaving'
+    );
+
+    // Leave WHILE the game is running — the case that previously only marked
+    // the player disconnected and left them in the engine forever.
+    const left = await emit(g, 'room:leave');
+    assert(left.success, 'room:leave succeeds mid-game');
+    hasLeft = true;
+    // Let the bot take several more turns; none of them should reach the leaver.
+    await new Promise(res => setTimeout(res, 2500));
+
+    assert(
+      !engine.players.some((p: any) => p.userId === accounts.bob.id),
+      'the seat is REMOVED from the engine, not just marked disconnected'
+    );
+    assertEqual(gUpdatesAfterLeave, 0, 'the leaver receives no further state for that game (the table does not come back)');
+
+    h.close();
+    g.close();
+  }
+
+  /* ---------------------------------------------------------------- */
+  section('A player belongs to only one game at a time');
+
+  {
+    const p1 = (await connect({ token: accounts.alice.token })).socket;
+    const { activeGames } = await import('../server/socket');
+
+    const first = await emit(p1, 'room:create', { settings: {} });
+    assert(first.success, 'first room created');
+    const firstEngine: any = activeGames.get(first.roomCode);
+    assert(
+      firstEngine.players.some((p: any) => p.userId === accounts.alice.id),
+      'seated in the first room'
+    );
+
+    // Creating another room must vacate the first, otherwise the old engine
+    // keeps broadcasting and its stale state overwrites the new game's view.
+    const second = await emit(p1, 'room:create', { settings: {} });
+    assert(second.success, 'second room created');
+    assert(second.roomCode !== first.roomCode, 'the second room is a different room');
+
+    const stillInFirst = activeGames.get(first.roomCode);
+    assert(
+      !stillInFirst || !stillInFirst.players.some((p: any) => p.userId === accounts.alice.id),
+      'no longer seated in the FIRST room (no stale game left broadcasting)'
+    );
+
+    const secondEngine: any = activeGames.get(second.roomCode);
+    assert(
+      secondEngine.players.some((p: any) => p.userId === accounts.alice.id),
+      'seated in the second room'
+    );
+
+    // Joining a third room by code must also vacate the second.
+    const p2 = (await connect({ token: accounts.bob.token })).socket;
+    const third = await emit(p2, 'room:create', { settings: {} });
+    await emit(p1, 'room:join', { roomCode: third.roomCode });
+    await new Promise(res => setTimeout(res, 300));
+
+    const secondAfter = activeGames.get(second.roomCode);
+    assert(
+      !secondAfter || !secondAfter.players.some((p: any) => p.userId === accounts.alice.id),
+      'joining a room by code also vacates the previous one'
+    );
+
+    p1.close();
+    p2.close();
+  }
+
+  /* ---------------------------------------------------------------- */
   section('REST brute-force protection');
 
   {

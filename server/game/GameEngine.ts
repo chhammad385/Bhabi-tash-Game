@@ -343,6 +343,80 @@ export class GameEngine {
     }
   }
 
+  /**
+   * Permanently removes a player who CHOSE to leave.
+   *
+   * This is different from a network drop. `removePlayer` only marks a
+   * mid-game player as disconnected so they can reconnect into their seat —
+   * but that left them in `players` forever, so the engine kept broadcasting
+   * to them. The result was that pressing Exit appeared to do nothing (the
+   * table reappeared on the next broadcast) and a stale game could overwrite
+   * the view of a newer one they had since joined.
+   */
+  public leaveGame(userId: string): { success: boolean; error?: string } {
+    const idx = this.players.findIndex(p => p.userId === userId || p.id === userId);
+    if (idx === -1) return { success: false, error: 'Player not in game' };
+
+    const target = this.players[idx];
+    const wasTheirTurn = this.currentTurnPlayerId === target.id;
+
+    if (target.disconnectTimeout) {
+      clearTimeout(target.disconnectTimeout);
+      target.disconnectTimeout = null;
+    }
+
+    // Cards held by a leaver go to the discard pile rather than vanishing, so
+    // the remaining players cannot be dealt a card that is already in play.
+    this.discardPileCount += target.cards.length;
+    target.cards = [];
+    target.cardCount = 0;
+
+    this.players.splice(idx, 1);
+    this.cardOfferCooldowns.delete(target.id);
+
+    // A pending offer involving the leaver is no longer answerable.
+    if (
+      this.activeCardOffer &&
+      (this.activeCardOffer.fromPlayerId === target.id || this.activeCardOffer.toPlayerId === target.id)
+    ) {
+      this.clearCardOfferTimer();
+      this.activeCardOffer = null;
+    }
+
+    this.acknowledgedPlayerIds = this.acknowledgedPlayerIds.filter(id => id !== target.id);
+
+    if (target.isHost && this.players.length > 0) {
+      const nextHost = this.players.find(p => !p.isBot) || this.players[0];
+      nextHost.isHost = true;
+      this.hostId = nextHost.userId;
+    }
+
+    if (this.phase !== 'waiting' && this.phase !== 'game_over') {
+      // Too few players left to continue: end the round.
+      if (this.getActivePlayers().length <= 1) {
+        this.clearTurnTimer();
+        this.clearReviewTimer();
+        this.checkGameOver();
+        this.notifyStateChange();
+        return { success: true };
+      }
+
+      if (wasTheirTurn) {
+        this.currentTurnPlayerId = this.getNextActivePlayerId(
+          this.players[Math.max(0, idx - 1)]?.id ?? this.players[0].id
+        );
+        this.nextTurnPlayerId = this.currentTurnPlayerId
+          ? this.getNextActivePlayerId(this.currentTurnPlayerId)
+          : null;
+        this.startTurnTimer();
+        this.checkAndScheduleBotMove();
+      }
+    }
+
+    this.notifyStateChange();
+    return { success: true };
+  }
+
   public toggleReady(userId: string): { success: boolean; error?: string } {
     if (this.phase !== 'waiting') return { success: false, error: 'Game already started' };
     const player = this.players.find(p => p.userId === userId);

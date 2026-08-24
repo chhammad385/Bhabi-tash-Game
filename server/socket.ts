@@ -183,7 +183,12 @@ export function setupSocketIO(server: http.Server) {
       });
     };
 
-    /** Send each player only their own sanitized view. */
+    /**
+     * Send each seated player their own sanitized view.
+     *
+     * Only players still present in `engine.players` are addressed, so a
+     * player who left can never be pulled back into a table they exited.
+     */
     const broadcastGameState = (engine: GameEngine) => {
       engine.players.forEach(p => {
         if (p.isBot) return;
@@ -192,6 +197,31 @@ export function setupSocketIO(server: http.Server) {
         const sanitized = engine.getSanitizedState(p.id);
         sockets.forEach(sid => io.to(sid).emit('game:state_update', sanitized));
       });
+    };
+
+    /**
+     * A player belongs to exactly one game. Before creating or joining, drop
+     * any seat they still hold elsewhere — otherwise the old engine keeps
+     * broadcasting and its state fights with the new game's for the same UI.
+     */
+    const leaveAllOtherGames = (keepRoomCode?: string) => {
+      for (const [code, other] of activeGames.entries()) {
+        if (code === keepRoomCode) continue;
+        if (!other.players.some(p => p.userId === user.id)) continue;
+
+        other.leaveGame(user.id);
+        socket.leave(`room:${code}`);
+        socket.leave(`voice:${code}`);
+        socket.to(`voice:${code}`).emit('voice:peer_left', { peerId: user.id });
+
+        if (other.players.length === 0 || other.players.every(p => p.isBot)) {
+          other.destroy();
+          activeGames.delete(code);
+          roomEmptySince.delete(code);
+        } else {
+          broadcastGameState(other);
+        }
+      }
     };
 
     const notifyFriendsPresence = (isOnline: boolean) => {
@@ -208,6 +238,7 @@ export function setupSocketIO(server: http.Server) {
     /* ------------------------- ROOM LIFECYCLE ------------------------- */
 
     on('room:create', (payload, respond) => {
+      leaveAllOtherGames();
       const roomCode = generateRoomCode();
       const gameId = `game_${Date.now()}_${roomCode}`;
 
@@ -247,6 +278,8 @@ export function setupSocketIO(server: http.Server) {
       if (!engine) {
         return respond({ success: false, error: 'Room not found. Check code and try again.' });
       }
+
+      leaveAllOtherGames(roomCode);
 
       const res = engine.addPlayer({
         id: user.id,
@@ -305,7 +338,10 @@ export function setupSocketIO(server: http.Server) {
 
       const engine = activeGames.get(roomCode);
       if (engine) {
-        engine.removePlayer(user.id);
+        // Leaving is deliberate, so vacate the seat completely. Marking the
+        // player merely "disconnected" left them in the engine, and the very
+        // next broadcast put the table back on their screen.
+        engine.leaveGame(user.id);
         socket.to(`voice:${roomCode}`).emit('voice:peer_left', { peerId: user.id });
         socket.leave(`voice:${roomCode}`);
         socket.leave(`room:${roomCode}`);
@@ -625,7 +661,10 @@ export function setupSocketIO(server: http.Server) {
       const player = engine.players.find(p => p.userId === user.id);
       if (player) {
         player.voiceJoined = true;
-        player.micMuted = false;
+        // Joining voice only means "I can hear you". The microphone stays off
+        // until the player explicitly turns it on, which is also when the
+        // browser permission prompt appears.
+        player.micMuted = true;
         broadcastGameState(engine);
       }
 

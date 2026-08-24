@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
 }) => {
   const { user, isGuest } = useAuth();
-  const { isVoiceConnected, isMicMuted, toggleMic, friendRequestCount } = useGame();
+  const { isVoiceConnected, isMicOn, toggleMic, friendRequestCount } = useGame();
   const [copiedPlayerId, setCopiedPlayerId] = useState(false);
   const [isMuted, setIsMuted] = useState(sounds.getIsMuted());
 
@@ -66,14 +66,18 @@ export const Header: React.FC<HeaderProps> = ({
             id="header-voice-mic-toggle"
             onClick={toggleMic}
             className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-semibold border transition ${
-              isMicMuted
-                ? 'bg-rose-950/60 text-rose-300 border-rose-800'
-                : 'bg-emerald-950/60 text-emerald-300 border-emerald-800 animate-pulse'
+              isMicOn
+                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800 animate-pulse'
+                : 'bg-slate-800/80 text-slate-400 border-slate-700'
             }`}
-            title={isMicMuted ? 'Unmute Microphone' : 'Mute Microphone'}
+            title={isMicOn ? 'Mic on — tap to stop talking' : 'Mic off — tap to talk'}
           >
-            {isMicMuted ? <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" /> : <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-emerald-400" />}
-            <span className="hidden md:inline">{isMicMuted ? 'Muted' : 'Voice Live'}</span>
+            {isMicOn ? (
+              <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-emerald-400" />
+            ) : (
+              <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+            )}
+            <span className="hidden md:inline">{isMicOn ? 'Talking' : 'Mic Off'}</span>
           </button>
         )}
 
