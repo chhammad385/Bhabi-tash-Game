@@ -929,15 +929,37 @@ export class GameEngine {
     // they MUST NOT escape yet if they won the trick (have the lead),
     // because they have to pull a blind face-down card from the other player!
     if (activePlayers.length === 2) {
+      /*
+       * The showdown can empty BOTH hands in one trick — the picker draws the
+       * opponent's last card, or the opponent follows suit and the trick is
+       * discarded. Previously the lead holder was kept "active" regardless, so
+       * a player who had already shed every card was crowned Bhabhi while
+       * holding nothing. The Bhabhi is by definition the last player still
+       * holding cards, so that outcome is impossible.
+       *
+       * When both hands are empty, the picker is the one who had ALREADY
+       * emptied their hand before the showdown began — that is the only reason
+       * they were drawing blind. They escape; the opponent, who was still
+       * holding cards going in, is the Bhabhi.
+       */
+      if (activePlayers.every(p => p.cards.length === 0)) {
+        const picker =
+          activePlayers.find(p => p.id === this.nextTurnPlayerId) ??
+          activePlayers.find(p => p.id === this.currentTurnPlayerId) ??
+          activePlayers[0];
+        this.markPlayerSafe(picker);
+        return;
+      }
+
       for (const player of activePlayers) {
         if (player.cards.length === 0) {
           if (this.nextTurnPlayerId === player.id) {
-            // Player won trick and has 0 cards -> stays active for blind card pull showdown!
+            // Won the trick with an empty hand: stays in for the blind draw,
+            // because the opponent still has cards to draw from.
             continue;
-          } else {
-            // Player did NOT win the trick and has 0 cards -> officially SAFE!
-            this.markPlayerSafe(player);
           }
+          // Ran out without the lead -> escapes.
+          this.markPlayerSafe(player);
         }
       }
       return;

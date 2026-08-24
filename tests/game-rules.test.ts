@@ -163,6 +163,110 @@ export function runGameRuleTests() {
   }
 
   /* ---------------------------------------------------------------- */
+  section('Two-player blind-draw showdown');
+
+  /** Sets up a 2-player endgame: C is already safe, B is empty and holds the lead. */
+  function showdown(aCards: Array<[Suit, Rank]>) {
+    const engine = buildGame(['A', 'B', 'C']);
+    engine.startGame('A');
+    (engine as any).isFirstTrickOfGame = false;
+    (engine as any).isFirstMoveOfGame = false;
+
+    const A = engine.players.find(p => p.id === 'A')!;
+    const B = engine.players.find(p => p.id === 'B')!;
+    const C = engine.players.find(p => p.id === 'C')!;
+
+    C.cards = []; C.cardCount = 0; C.status = 'safe'; C.finishOrder = 1;
+    A.cards = aCards.map(([su, r]) => createCard(su, r, 0));
+    A.cardCount = A.cards.length; A.status = 'active';
+    B.cards = []; B.cardCount = 0; B.status = 'active';
+
+    engine.phase = 'playing';
+    engine.currentTrick = [];
+    engine.leadSuit = null;
+    engine.currentTurnPlayerId = 'B';
+    engine.nextTurnPlayerId = 'A';
+    return { engine, A, B };
+  }
+
+  {
+    // B (already empty) draws A's LAST card. Both hands end up empty.
+    const { engine, A, B } = showdown([['H', 'K']]);
+    assert(engine.getBlindDrawState() !== null, 'the blind draw is offered to the empty player');
+
+    const pull = engine.blindDrawCard('B', 0);
+    assert(pull.success, 'B can draw a card from A');
+    if (engine.phase === 'trick_review') engine.finishTrickReview();
+
+    assertEqual(engine.phase, 'game_over', 'the game ends when no cards remain');
+    assertEqual(A.cards.length, 0, 'A has no cards left');
+    assertEqual(B.cards.length, 0, 'B has no cards left');
+
+    const bhabhi = engine.players.find(p => p.id === engine.bhabhiPlayerId);
+    assertEqual(
+      engine.bhabhiPlayerId,
+      'A',
+      'the player who still HELD cards going into the showdown is the Bhabhi, not the one who was already empty'
+    );
+    assertEqual(B.status, 'safe', 'the empty player who drew escapes');
+    assert(!!bhabhi, 'a Bhabhi is chosen');
+  }
+
+  {
+    // A follows suit and loses the trick. Again both hands empty out.
+    const { engine, A, B } = showdown([['H', 'K'], ['H', '2']]);
+    engine.blindDrawCard('B', 0);
+    const follow = engine.playCard('A', 'H_2_0');
+    assert(follow.success, 'A can follow the drawn suit');
+    if (engine.phase === 'trick_review') engine.finishTrickReview();
+
+    assertEqual(A.cards.length, 0, 'A is empty');
+    assertEqual(B.cards.length, 0, 'B is empty');
+    assertEqual(engine.bhabhiPlayerId, 'A', 'the Bhabhi is A, who was the one holding cards');
+    assertEqual(B.status, 'safe', 'B escapes rather than losing with an empty hand');
+  }
+
+  {
+    // A cannot follow the drawn suit and throws a Tochoo, so B picks the pile up.
+    const { engine, A, B } = showdown([['H', 'K'], ['S', '3']]);
+    engine.blindDrawCard('B', 0);
+    const tochoo = engine.playCard('A', 'S_3_0');
+    assert(tochoo.success, 'A may play off-suit when void in the drawn suit');
+    assertEqual(engine.lastCompletedTrick?.isTochoo, true, 'that counts as a Tochoo');
+    assertEqual(engine.lastCompletedTrick?.highestPlayerId, 'B', 'B held the highest card of the led suit');
+
+    if (engine.phase === 'trick_review') engine.finishTrickReview();
+
+    assertEqual(B.cards.length, 2, 'B picks up both cards, so B is genuinely holding cards');
+    assertEqual(A.cards.length, 0, 'A shed their last card');
+    assertEqual(engine.bhabhiPlayerId, 'B', 'B is the Bhabhi because B is the one left holding cards');
+  }
+
+  {
+    // The invariant that was broken: whoever is crowned Bhabhi must actually
+    // be holding cards, unless every remaining hand emptied at once.
+    for (const hand of [
+      [['H', 'K']] as Array<[Suit, Rank]>,
+      [['H', 'K'], ['H', '2']] as Array<[Suit, Rank]>,
+      [['H', 'K'], ['S', '3']] as Array<[Suit, Rank]>,
+    ]) {
+      const { engine } = showdown(hand);
+      engine.blindDrawCard('B', 0);
+      if (engine.phase === 'playing') {
+        const A2 = engine.players.find(p => p.id === 'A')!;
+        if (A2.cards[0]) engine.playCard('A', A2.cards[0].id);
+      }
+      if (engine.phase === 'trick_review') engine.finishTrickReview();
+
+      const picker = engine.players.find(p => p.id === 'B')!;
+      assert(
+        engine.bhabhiPlayerId !== 'B' || picker.cards.length > 0,
+        `the blind-draw picker is never crowned Bhabhi empty-handed (hand: ${hand.map(h => h.join('')).join(',')})`
+      );
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
   section('Client cannot influence the outcome through settings');
 
   {
