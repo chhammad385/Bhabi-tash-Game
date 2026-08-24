@@ -227,19 +227,52 @@ export function runGameRuleTests() {
   }
 
   {
-    // A cannot follow the drawn suit and throws a Tochoo, so B picks the pile up.
-    const { engine, A, B } = showdown([['H', 'K'], ['S', '3']]);
+    /*
+     * The opponent is void in the drawn suit and throws a Thulla. The showdown
+     * is decisive: the picker eats the pile and loses on the spot, even though
+     * the opponent still has cards in hand.
+     */
+    const { engine, A, B } = showdown([['H', 'K'], ['S', '3'], ['S', '9']]);
     engine.blindDrawCard('B', 0);
     const tochoo = engine.playCard('A', 'S_3_0');
     assert(tochoo.success, 'A may play off-suit when void in the drawn suit');
-    assertEqual(engine.lastCompletedTrick?.isTochoo, true, 'that counts as a Tochoo');
-    assertEqual(engine.lastCompletedTrick?.highestPlayerId, 'B', 'B held the highest card of the led suit');
+    assertEqual(engine.lastCompletedTrick?.isTochoo, true, 'that counts as a Thulla');
+    assertEqual(engine.lastCompletedTrick?.highestPlayerId, 'B', 'the picker held the highest card of the led suit');
 
     if (engine.phase === 'trick_review') engine.finishTrickReview();
 
-    assertEqual(B.cards.length, 2, 'B picks up both cards, so B is genuinely holding cards');
-    assertEqual(A.cards.length, 0, 'A shed their last card');
-    assertEqual(engine.bhabhiPlayerId, 'B', 'B is the Bhabhi because B is the one left holding cards');
+    assertEqual(engine.phase, 'game_over', 'a Thulla ENDS the showdown immediately');
+    assertEqual(B.cards.length, 2, 'the picker eats the pile');
+    assertEqual(engine.bhabhiPlayerId, 'B', 'the picker loses the showdown');
+    assertEqual(A.status, 'safe', 'the opponent survives, even while still holding cards');
+    assert(A.cards.length > 0, 'and the survivor genuinely still had cards');
+  }
+
+  {
+    // The opponent beats the drawn card: the picker escapes, opponent is Bhabhi.
+    const { engine, A, B } = showdown([['H', '2'], ['H', 'A'], ['S', '9']]);
+    engine.blindDrawCard('B', 0);
+    const higher = engine.playCard('A', 'H_A_0');
+    assert(higher.success, 'the opponent may answer with a higher card of the led suit');
+    if (engine.phase === 'trick_review') engine.finishTrickReview();
+
+    assertEqual(engine.phase, 'game_over', 'beating the drawn card ends the showdown');
+    assertEqual(B.status, 'safe', 'the picker escapes because their hand was already empty');
+    assertEqual(engine.bhabhiPlayerId, 'A', 'the opponent is the Bhabhi');
+  }
+
+  {
+    // The drawn card wins: everything is discarded and the picker draws again.
+    const { engine, A, B } = showdown([['H', '2'], ['H', 'K'], ['S', '9']]);
+    engine.blindDrawCard('B', 1); // draw the King
+    const lower = engine.playCard('A', 'H_2_0');
+    assert(lower.success, 'the opponent may answer with a lower card');
+    if (engine.phase === 'trick_review') engine.finishTrickReview();
+
+    assertEqual(engine.phase, 'playing', 'the game continues when the drawn card wins');
+    assertEqual(engine.currentTurnPlayerId, 'B', 'the picker keeps the lead and draws again');
+    assertEqual(B.cards.length, 0, 'the picker still holds nothing');
+    assert(engine.getBlindDrawState() !== null, 'another blind draw is offered');
   }
 
   {

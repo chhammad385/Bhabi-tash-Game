@@ -80,6 +80,13 @@ export class GameEngine {
   private onStateChangeCallback?: (engine: GameEngine) => void;
   private safeCounter = 1;
 
+  /**
+   * Set to the picker's id while a trick opened by a blind draw is in play.
+   * The showdown is decisive, so its outcome ends the game rather than
+   * feeding into another round of normal play.
+   */
+  private blindDrawPickerId: string | null = null;
+
   /** Per-player timestamp of the last card-transfer request. */
   private cardOfferCooldowns = new Map<string, number>();
   private static readonly CARD_OFFER_COOLDOWN_MS = 30_000;
@@ -930,6 +937,34 @@ export class GameEngine {
     // because they have to pull a blind face-down card from the other player!
     if (activePlayers.length === 2) {
       /*
+       * A blind-draw trick is a SHOWDOWN: it settles the game outright.
+       *
+       *   - the opponent beats the drawn card -> the picker escapes and the
+       *     opponent is the Bhabhi (handled below, since the picker is empty
+       *     and did not win the trick);
+       *   - the drawn card wins -> everything is discarded and the picker
+       *     draws again;
+       *   - the opponent cannot follow and throws a Thulla -> the picker eats
+       *     the pile and LOSES on the spot.
+       *
+       * That last case is what this branch is for. Without it the picker
+       * simply carried on with the cards they had just picked up, and the
+       * showdown quietly turned back into an ordinary game.
+       */
+      if (this.blindDrawPickerId && this.lastCompletedTrick?.isTochoo) {
+        const picker = activePlayers.find(p => p.id === this.blindDrawPickerId);
+        const opponent = activePlayers.find(p => p.id !== this.blindDrawPickerId);
+        this.blindDrawPickerId = null;
+        if (picker && opponent) {
+          // The opponent survives the showdown; the picker is left as the
+          // only active player and therefore becomes the Bhabhi.
+          this.markPlayerSafe(opponent);
+          return;
+        }
+      }
+      this.blindDrawPickerId = null;
+
+      /*
        * The showdown can empty BOTH hands in one trick — the picker draws the
        * opponent's last card, or the opponent follows suit and the trick is
        * discarded. Previously the lead holder was kept "active" regardless, so
@@ -1143,6 +1178,9 @@ export class GameEngine {
     // Pull selected card from target player's hand
     const drawnCard = targetPlayer.cards.splice(cardIndex, 1)[0];
     targetPlayer.cardCount = targetPlayer.cards.length;
+
+    // This trick belongs to the showdown, whichever way it resolves.
+    this.blindDrawPickerId = picker.id;
 
     // Place card on table as lead card for the picker
     this.leadSuit = drawnCard.suit;
@@ -1477,6 +1515,7 @@ export class GameEngine {
 
   public resetForNewGame(): { success: boolean; error?: string } {
     this.phase = 'waiting';
+    this.blindDrawPickerId = null;
     this.currentTurnPlayerId = null;
     this.nextTurnPlayerId = null;
     this.leadSuit = null;
