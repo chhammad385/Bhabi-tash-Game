@@ -52,7 +52,7 @@ interface GameContextType {
   joinVoiceChat: () => Promise<boolean>;
   /** Requests mic permission on first use; toggles transmission thereafter. */
   toggleMic: () => Promise<boolean>;
-  toggleSpeaker: () => void;
+  toggleSpeaker: () => Promise<void>;
   leaveVoiceChat: () => void;
   dismissInvite: () => void;
   acceptInvite: (invite: GameInvitationNotification) => void;
@@ -447,10 +447,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return voiceManagerRef.current.toggleMic();
   };
 
-  /** Speaker controls whether YOU hear the others. Never touches the mic. */
-  const toggleSpeaker = () => {
-    if (!voiceManagerRef.current) return;
-    voiceManagerRef.current.toggleSpeaker();
+  /**
+   * Speaker controls whether YOU hear the others, and never touches the mic.
+   * Pressing it while disconnected joins the voice mesh first, so there is no
+   * separate "join voice" step to discover.
+   */
+  const toggleSpeaker = async () => {
+    const vm = voiceManagerRef.current;
+    if (!vm) return;
+
+    if (!vm.isJoined) {
+      await vm.joinVoice();
+      vm.setSpeaker(true);
+      return;
+    }
+    vm.toggleSpeaker();
   };
 
   const leaveVoiceChat = () => {

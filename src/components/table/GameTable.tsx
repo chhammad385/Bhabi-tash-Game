@@ -238,67 +238,56 @@ export const GameTable: React.FC = () => {
           </div>
 
           {gameState.settings.voiceEnabled && (
-            <div className="flex items-center">
-              {!isVoiceConnected ? (
-                <button
-                  id="table-join-voice-btn"
-                  onClick={joinVoiceChat}
-                  className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition"
-                  title="Connect to voice chat"
-                >
+            <div className="flex items-center gap-1">
+              {/*
+                Two controls, one job each — there is no separate "join" step.
+                  Mic     : does MY voice go out?
+                  Speaker : do I hear THEIR voice?
+                Either button connects to the voice mesh on first use.
+              */}
+              <button
+                id="table-toggle-mic-btn"
+                onClick={toggleMic}
+                aria-pressed={isMicOn}
+                className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg border text-[11px] sm:text-xs font-semibold transition ${
+                  isMicOn
+                    ? 'bg-emerald-950/70 text-emerald-300 border-emerald-600'
+                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                }`}
+                title={isMicOn ? 'Mic ON - your voice is being sent' : 'Mic OFF - your voice is not being sent'}
+              >
+                {isMicOn ? (
+                  <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                ) : (
+                  <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                )}
+                <span className="hidden md:inline">{isMicOn ? 'Mic On' : 'Mic Off'}</span>
+              </button>
+
+              <button
+                id="table-toggle-speaker-btn"
+                onClick={toggleSpeaker}
+                aria-pressed={isSpeakerOn && isVoiceConnected}
+                className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg border text-[11px] sm:text-xs font-semibold transition ${
+                  isSpeakerOn && isVoiceConnected
+                    ? 'bg-indigo-950/70 text-indigo-300 border-indigo-600'
+                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                }`}
+                title={
+                  isSpeakerOn && isVoiceConnected
+                    ? 'Speaker ON - you can hear the other players'
+                    : 'Speaker OFF - you cannot hear the other players'
+                }
+              >
+                {isSpeakerOn && isVoiceConnected ? (
                   <Volume2 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                  <span className="hidden sm:inline">Join Voice</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-1">
-                  {/* MIC — controls whether the others hear YOU */}
-                  <button
-                    id="table-toggle-mic-btn"
-                    onClick={toggleMic}
-                    aria-pressed={isMicOn}
-                    className={`p-1 sm:p-1.5 rounded-lg border text-xs font-semibold transition ${
-                      isMicOn
-                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700 animate-pulse'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-                    }`}
-                    title={isMicOn ? 'Mic on - others can hear you' : 'Mic off - others cannot hear you'}
-                  >
-                    {isMicOn ? (
-                      <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                    ) : (
-                      <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                    )}
-                  </button>
-
-                  {/* SPEAKER — controls whether YOU hear the others */}
-                  <button
-                    id="table-toggle-speaker-btn"
-                    onClick={toggleSpeaker}
-                    aria-pressed={isSpeakerOn}
-                    className={`p-1 sm:p-1.5 rounded-lg border text-xs font-semibold transition ${
-                      isSpeakerOn
-                        ? 'bg-indigo-950/60 text-indigo-300 border-indigo-700'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-                    }`}
-                    title={isSpeakerOn ? 'Speaker on - you can hear others' : 'Speaker off - you cannot hear others'}
-                  >
-                    {isSpeakerOn ? (
-                      <Volume2 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                    ) : (
-                      <VolumeX className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                    )}
-                  </button>
-
-                  <button
-                    id="table-leave-voice-btn"
-                    onClick={leaveVoiceChat}
-                    className="p-1 sm:p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-rose-400 text-xs transition"
-                    title="Disconnect from voice"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <VolumeX className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                )}
+                <span className="hidden md:inline">
+                  {isSpeakerOn && isVoiceConnected ? 'Speaker On' : 'Speaker Off'}
+                </span>
+              </button>
             </div>
           )}
         </div>
