@@ -915,8 +915,26 @@ export class GameEngine {
     // Check game over
     if (this.checkGameOver()) return;
 
-    // Set next turn
-    this.currentTurnPlayerId = this.nextTurnPlayerId || this.getNextActivePlayerId(this.players[0].id);
+    /*
+     * Set next turn.
+     *
+     * The lead was worked out when the trick finished, which is BEFORE escapes
+     * were processed. A player who wins a trick with their last card escapes a
+     * moment later, and handing the lead to them leaves the table waiting on
+     * somebody who can never act again: no cards to play, and blocked from
+     * playing because they are no longer active. The game hangs there forever.
+     *
+     * So the lead only stands if that player is still in the game; otherwise it
+     * carries on round the table. The 1-on-1 showdown is unaffected, because
+     * there an empty-handed lead holder is deliberately kept active in order to
+     * take the blind draw.
+     */
+    const intendedLeadId = this.nextTurnPlayerId || this.players[0].id;
+    const intendedLead = this.players.find(p => p.id === intendedLeadId);
+    this.currentTurnPlayerId =
+      intendedLead && intendedLead.status === 'active'
+        ? intendedLead.id
+        : this.getNextActivePlayerId(intendedLeadId);
     this.nextTurnPlayerId = this.getNextActivePlayerId(this.currentTurnPlayerId);
 
     this.phase = 'playing';
@@ -1129,7 +1147,7 @@ export class GameEngine {
       return null;
     }
     const currentTurnPlayer = this.players.find(p => p.id === this.currentTurnPlayerId);
-    if (!currentTurnPlayer || currentTurnPlayer.cards.length !== 0) {
+    if (!currentTurnPlayer || currentTurnPlayer.status !== 'active' || currentTurnPlayer.cards.length !== 0) {
       return null;
     }
     const otherPlayer = activePlayers.find(p => p.id !== currentTurnPlayer.id);
@@ -1236,6 +1254,62 @@ export class GameEngine {
     }
   }
 
+  /**
+   * Suits that at least one still-active opponent is known to be void in.
+   *
+   * A player reveals a void the moment they answer a led suit with a different
+   * one. Leading that suit again just hands them another Thulla, which is
+   * exactly the loop a bot could previously fall into. The knowledge expires
+   * if that player later picks up a pile containing the suit, because those
+   * cards restore it to their hand.
+   */
+  private getOpponentVoidSuits(forPlayerId: string): Suit[] {
+    const voids = new Map<string, Set<Suit>>();
+
+    for (const trick of this.sarHistory) {
+      const lead = trick.leadSuit;
+      if (!lead) continue;
+
+      for (const played of trick.cards) {
+        if (played.card.suit !== lead) {
+          if (!voids.has(played.playerId)) voids.set(played.playerId, new Set());
+          voids.get(played.playerId)!.add(lead);
+        }
+      }
+
+      // Whoever ate the pile got those suits back.
+      if (trick.isTochoo && trick.highestPlayerId && trick.penaltyCards) {
+        const held = voids.get(trick.highestPlayerId);
+        if (held) trick.penaltyCards.forEach(c => held.delete(c.suit));
+      }
+    }
+
+    const result = new Set<Suit>();
+    for (const [playerId, suits] of voids) {
+      if (playerId === forPlayerId) continue;
+      const p = this.players.find(x => x.id === playerId);
+      if (!p || p.status !== 'active') continue;
+      suits.forEach(su => result.add(su));
+    }
+    return [...result];
+  }
+
+  /** Every card played so far this game, so a bot can reason about what is left. */
+  private getSeenCards(): Card[] {
+    const seen: Card[] = [];
+    this.sarHistory.forEach(t => t.cards.forEach(c => seen.push(c.card)));
+    this.currentTrick.forEach(t => seen.push(t.card));
+    return seen;
+  }
+
+  /** Active players still to act after `playerId` in the current trick. */
+  private getPlayersAfter(playerId: string): number {
+    const alreadyPlayed = new Set(this.currentTrick.map(t => t.playerId));
+    return this.getActivePlayers().filter(
+      p => p.id !== playerId && !alreadyPlayed.has(p.id)
+    ).length;
+  }
+
   public checkAndScheduleBotMove() {
     if (this.phase !== 'playing' || !this.currentTurnPlayerId) return;
     const player = this.players.find(p => p.id === this.currentTurnPlayerId);
@@ -1260,13 +1334,22 @@ export class GameEngine {
     setTimeout(() => {
       if (this.phase !== 'playing' || this.currentTurnPlayerId !== player.id) return;
       try {
-        const card = BotAI.selectCard(
-          player.cards,
-          this.isFirstMoveOfGame,
-          this.leadSuit,
-          this.currentTrick,
-          this.settings.botDifficulty
-        );
+        const card = BotAI.selectCard({
+          hand: player.cards,
+          isFirstMoveOfGame: this.isFirstMoveOfGame,
+          leadSuit: this.leadSuit,
+          currentTrick: this.currentTrick,
+          difficulty: this.settings.botDifficulty,
+          opponentVoidSuits: this.getOpponentVoidSuits(player.id),
+          playersAfterMe: this.getPlayersAfter(player.id),
+          seenCards: this.getSeenCards(),
+          minOpponentCards: Math.min(
+            ...this.getActivePlayers()
+              .filter(p => p.id !== player.id)
+              .map(p => p.cards.length),
+            99
+          ),
+        });
         this.playCard(player.id, card.id);
       } catch (err) {
         console.error('[GameEngine] Bot AI play error:', err);

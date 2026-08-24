@@ -43,6 +43,9 @@ async function main() {
   const { runGameRuleTests } = await import('./game-rules.test');
   runGameRuleTests();
 
+  const { runBotAITests } = await import('./bot-ai.test');
+  runBotAITests();
+
   console.log('\n########## SECURITY & ANTI-CHEAT ##########');
   const { runSecurityTests } = await import('./security.test');
   runSecurityTests();
