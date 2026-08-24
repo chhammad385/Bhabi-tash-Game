@@ -1,12 +1,22 @@
 // Web Audio Synthesizer for Bhabhi Game Sound Effects
 // Self-contained, zero external asset dependencies
 
+/** localStorage key for the sound-effects preference. */
+const MUTE_KEY = 'bhabhi_sound_muted';
+
 class SoundManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
 
   constructor() {
-    // Lazy AudioContext initialization on first user interaction
+    // AudioContext stays lazy until the first user interaction, but the mute
+    // preference is restored immediately so a muted player is not greeted by
+    // sound on every page load.
+    try {
+      this.isMuted = localStorage.getItem(MUTE_KEY) === 'true';
+    } catch {
+      // Private browsing or blocked storage: fall back to unmuted.
+    }
   }
 
   private getContext(): AudioContext | null {
@@ -25,6 +35,11 @@ class SoundManager {
 
   public setMuted(muted: boolean) {
     this.isMuted = muted;
+    try {
+      localStorage.setItem(MUTE_KEY, String(muted));
+    } catch {
+      // Preference simply will not survive a reload; sound still toggles.
+    }
   }
 
   public getIsMuted(): boolean {

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Users, Trophy, BookOpen, User as UserIcon, Copy, Check, LogIn } from 'lucide-react';
+import { Users, Trophy, BookOpen, User as UserIcon, Copy, Check, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useGame } from '../../context/GameContext';
-import { sounds } from '../../lib/audio';
 
 interface HeaderProps {
   onOpenRules: () => void;
@@ -20,7 +19,6 @@ export const Header: React.FC<HeaderProps> = ({
   const { user, isGuest } = useAuth();
   const { friendRequestCount } = useGame();
   const [copiedPlayerId, setCopiedPlayerId] = useState(false);
-  const [isMuted, setIsMuted] = useState(sounds.getIsMuted());
 
   const handleCopyPlayerId = () => {
     if (user?.playerId) {
@@ -30,11 +28,6 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const toggleSound = () => {
-    const next = !isMuted;
-    setIsMuted(next);
-    sounds.setMuted(next);
-  };
 
   return (
     <header className="w-full bg-slate-900/95 border-b border-slate-800 backdrop-blur-md px-2 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between z-30 sticky top-0">
@@ -111,16 +104,6 @@ export const Header: React.FC<HeaderProps> = ({
           title="Stats & Leaderboard"
         >
           <Trophy className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-        </button>
-
-        {/* Sound FX Toggle */}
-        <button
-          id="header-sound-btn"
-          onClick={toggleSound}
-          className="p-1 sm:p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-          title={isMuted ? 'Unmute Sounds' : 'Mute Sounds'}
-        >
-          {isMuted ? <VolumeX className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-rose-400" /> : <Volume2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-emerald-400" />}
         </button>
 
         {/* Profile / Login */}
