@@ -205,9 +205,6 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ onOpenFriends }) => {
                   <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-xl font-bold text-amber-400">
                     {player.isBot ? '🤖' : player.displayName.charAt(0).toUpperCase()}
                   </div>
-                  {player.speaking && (
-                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-slate-900 animate-ping" />
-                  )}
                 </div>
 
                 <div className="w-full">

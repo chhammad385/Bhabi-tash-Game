@@ -3,7 +3,7 @@
  * separate authenticated sessions (Player A, B and C).
  *
  * These exercise the attack surface from the client side: impersonation,
- * unauthorized room access, cross-room chat/voice, and rate limits.
+ * unauthorized room access, cross-room chat isolation, and rate limits.
  */
 import http from 'http';
 import express from 'express';
@@ -251,30 +251,6 @@ export async function runSocketTests() {
     assert(msg !== null, 'the message is delivered');
     assertEqual(msg.userId, accounts.alice.id, 'the server overrides any client-supplied userId');
     assertEqual(msg.displayName, 'alice', 'the server overrides any client-supplied display name');
-  }
-
-  /* ---------------------------------------------------------------- */
-  section('WebRTC signaling authorization');
-
-  {
-    // C is in a different room and has not joined voice.
-    const crossRoom = await emit(C, 'voice:offer', { to: accounts.alice.id, offer: { sdp: 'fake' } });
-    assert(!crossRoom.success, 'cross-room WebRTC offer is refused');
-
-    const spy = nextEvent(A, 'voice:offer', 1200);
-    C.emit('voice:offer', { to: accounts.alice.id, offer: { sdp: 'fake' } });
-    const leaked = await spy;
-    assertEqual(leaked, null, 'the refused offer is never relayed to the victim');
-
-    // Even inside the same room, both peers must have joined voice.
-    const notJoined = await emit(B, 'voice:offer', { to: accounts.alice.id, offer: { sdp: 'x' } });
-    assert(!notJoined.success, 'signaling is refused until both peers explicitly join voice');
-
-    const iceCross = await emit(C, 'voice:ice_candidate', {
-      to: accounts.alice.id,
-      candidate: { candidate: 'x' },
-    });
-    assert(!iceCross.success, 'cross-room ICE candidate relay is refused (no IP disclosure)');
   }
 
   /* ---------------------------------------------------------------- */

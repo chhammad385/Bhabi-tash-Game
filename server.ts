@@ -37,8 +37,7 @@ async function startServer() {
               styleSrc: ["'self'", "'unsafe-inline'"],
               scriptSrc: ["'self'"],
               imgSrc: ["'self'", 'data:', 'blob:'],
-              mediaSrc: ["'self'", 'blob:'],
-              // API + WebSocket + STUN for WebRTC.
+              // API + WebSocket.
               connectSrc: ["'self'", 'ws:', 'wss:', 'https:'],
               objectSrc: ["'none'"],
               frameAncestors: ["'none'"],
@@ -81,7 +80,7 @@ async function startServer() {
 
   app.use('/api', apiRoutes);
 
-  // Socket.IO multiplayer + WebRTC signaling (authenticated in setupSocketIO).
+  // Socket.IO multiplayer (authenticated in setupSocketIO).
   setupSocketIO(server);
 
   if (!IS_PRODUCTION) {

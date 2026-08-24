@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Users, Trophy, BookOpen, User as UserIcon, Copy, Check, LogIn, Mic, MicOff } from 'lucide-react';
+import { Volume2, VolumeX, Users, Trophy, BookOpen, User as UserIcon, Copy, Check, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useGame } from '../../context/GameContext';
 import { sounds } from '../../lib/audio';
@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
 }) => {
   const { user, isGuest } = useAuth();
-  const { isVoiceConnected, isMicOn, toggleMic, friendRequestCount } = useGame();
+  const { friendRequestCount } = useGame();
   const [copiedPlayerId, setCopiedPlayerId] = useState(false);
   const [isMuted, setIsMuted] = useState(sounds.getIsMuted());
 
@@ -60,26 +60,6 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Center / Right controls */}
       <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
-        {/* Voice Chat Active Pill */}
-        {isVoiceConnected && (
-          <button
-            id="header-voice-mic-toggle"
-            onClick={toggleMic}
-            className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-semibold border transition ${
-              isMicOn
-                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800 animate-pulse'
-                : 'bg-slate-800/80 text-slate-400 border-slate-700'
-            }`}
-            title={isMicOn ? 'Mic on — tap to stop talking' : 'Mic off — tap to talk'}
-          >
-            {isMicOn ? (
-              <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-emerald-400" />
-            ) : (
-              <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-            )}
-            <span className="hidden md:inline">{isMicOn ? 'Talking' : 'Mic Off'}</span>
-          </button>
-        )}
 
         {/* Player ID Badge */}
         {user?.playerId && (

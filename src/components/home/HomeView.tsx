@@ -29,7 +29,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
     maxPlayers: 4,
     turnTimer: 30,
     isPrivate: true,
-    voiceEnabled: true,
     chatEnabled: true,
     spectatorsAllowed: false,
     botDifficulty: 'normal',
@@ -95,7 +94,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
             </h1>
             <p className="sr-only">
               Bhabhi, also known as Thulla or Getaway, is a South Asian shedding card game for 3 to 8
-              players. Free multiplayer with voice chat, private rooms and AI bots.
+              players. Free multiplayer with private rooms, live chat and AI bots.
             </p>
             <p className="text-slate-300 text-sm sm:text-base mt-2 leading-relaxed">
               Play the legendary South Asian card getaway game online with friends or players worldwide.
@@ -190,7 +189,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
             </div>
             <h3 className="text-lg font-bold text-white mb-1">Create Private Game</h3>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Host a custom room for 3–8 friends with customizable timers, voice chat, and bot slots.
+              Host a custom room for 3–8 friends with customizable turn timers, live chat and bot slots.
             </p>
           </div>
 
@@ -279,7 +278,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
         <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/60 flex items-start gap-3">
           <Mic className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div>
-            <h5 className="text-xs font-bold text-white uppercase tracking-wider">Live WebRTC Voice Chat</h5>
+            <h5 className="text-xs font-bold text-white uppercase tracking-wider">Live Chat &amp; Reconnect</h5>
             <p className="text-xs text-slate-400 mt-1">Talk to friends directly in real time with speaking indicators and mute controls.</p>
           </div>
         </div>
@@ -355,16 +354,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
 
             {/* Toggles */}
             <div className="flex items-center justify-between py-2 border-y border-slate-800/80">
-              <span className="text-xs text-slate-300 font-medium">Enable WebRTC Voice Chat</span>
-              <input
-                type="checkbox"
-                checked={createSettings.voiceEnabled}
-                onChange={(e) => setCreateSettings({ ...createSettings, voiceEnabled: e.target.checked })}
-                className="w-4 h-4 accent-amber-500 rounded"
-              />
-            </div>
-
-            <div className="flex items-center justify-between pb-2">
               <span className="text-xs text-slate-300 font-medium">Enable In-Game Text Chat</span>
               <input
                 type="checkbox"

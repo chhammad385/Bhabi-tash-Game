@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   MessageSquare,
-  Mic,
-  MicOff,
   LogOut,
   Clock,
   Flame,
   Layers,
   Sparkles,
-  Volume2,
-  VolumeX,
   Send,
   CheckCircle2,
   AlertTriangle,
@@ -47,15 +43,6 @@ export const GameTable: React.FC = () => {
     sendChatMessage,
     unreadChatCount,
     markChatRead,
-    isVoiceConnected,
-    isMicOn,
-    isSpeakerOn,
-    isSpeaking,
-    peerSpeaking,
-    joinVoiceChat,
-    toggleMic,
-    toggleSpeaker,
-    leaveVoiceChat,
     errorMessage,
     setErrorMessage,
   } = useGame();
@@ -237,59 +224,6 @@ export const GameTable: React.FC = () => {
             <span>Discarded: {gameState.discardPileCount}</span>
           </div>
 
-          {gameState.settings.voiceEnabled && (
-            <div className="flex items-center gap-1">
-              {/*
-                Two controls, one job each — there is no separate "join" step.
-                  Mic     : does MY voice go out?
-                  Speaker : do I hear THEIR voice?
-                Either button connects to the voice mesh on first use.
-              */}
-              <button
-                id="table-toggle-mic-btn"
-                onClick={toggleMic}
-                aria-pressed={isMicOn}
-                className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg border text-[11px] sm:text-xs font-semibold transition ${
-                  isMicOn
-                    ? 'bg-emerald-950/70 text-emerald-300 border-emerald-600'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-                }`}
-                title={isMicOn ? 'Mic ON - your voice is being sent' : 'Mic OFF - your voice is not being sent'}
-              >
-                {isMicOn ? (
-                  <Mic className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                ) : (
-                  <MicOff className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                )}
-                <span className="hidden md:inline">{isMicOn ? 'Mic On' : 'Mic Off'}</span>
-              </button>
-
-              <button
-                id="table-toggle-speaker-btn"
-                onClick={toggleSpeaker}
-                aria-pressed={isSpeakerOn && isVoiceConnected}
-                className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg border text-[11px] sm:text-xs font-semibold transition ${
-                  isSpeakerOn && isVoiceConnected
-                    ? 'bg-indigo-950/70 text-indigo-300 border-indigo-600'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-                }`}
-                title={
-                  isSpeakerOn && isVoiceConnected
-                    ? 'Speaker ON - you can hear the other players'
-                    : 'Speaker OFF - you cannot hear the other players'
-                }
-              >
-                {isSpeakerOn && isVoiceConnected ? (
-                  <Volume2 className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                ) : (
-                  <VolumeX className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                )}
-                <span className="hidden md:inline">
-                  {isSpeakerOn && isVoiceConnected ? 'Speaker On' : 'Speaker Off'}
-                </span>
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Turn Status Message Banner - Compact and responsive */}
@@ -377,7 +311,6 @@ export const GameTable: React.FC = () => {
           {opponents.map((opponent) => {
             const isTurn = gameState.currentTurn === opponent.id;
             const isNext = gameState.nextTurnPlayerId === opponent.id && !isTurn;
-            const isPeerSpeaking = peerSpeaking[opponent.userId] || opponent.speaking;
             const isSafe = opponent.status === 'safe';
 
             return (
@@ -394,7 +327,7 @@ export const GameTable: React.FC = () => {
                     : 'bg-slate-900/80 border-slate-800'
                 }`}
               >
-                {/* Avatar with Voice / Speaking Wave */}
+                {/* Avatar */}
                 <div className="relative shrink-0">
                   <div
                     className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold bg-slate-800 text-amber-300 border ${
@@ -407,14 +340,6 @@ export const GameTable: React.FC = () => {
                   >
                     {opponent.isBot ? '🤖' : opponent.displayName.charAt(0).toUpperCase()}
                   </div>
-                  {isPeerSpeaking && (
-                    <span className="absolute -inset-1 rounded-full border-2 border-emerald-400 animate-ping pointer-events-none" />
-                  )}
-                  {opponent.micMuted && (
-                    <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-rose-900 text-white text-[8px]">
-                      <MicOff className="w-2.5 h-2.5" />
-                    </div>
-                  )}
                 </div>
 
                 {/* Info */}

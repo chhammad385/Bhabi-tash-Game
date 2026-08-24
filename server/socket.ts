@@ -211,8 +211,6 @@ export function setupSocketIO(server: http.Server) {
 
         other.leaveGame(user.id);
         socket.leave(`room:${code}`);
-        socket.leave(`voice:${code}`);
-        socket.to(`voice:${code}`).emit('voice:peer_left', { peerId: user.id });
 
         if (other.players.length === 0 || other.players.every(p => p.isBot)) {
           other.destroy();
@@ -342,8 +340,6 @@ export function setupSocketIO(server: http.Server) {
         // player merely "disconnected" left them in the engine, and the very
         // next broadcast put the table back on their screen.
         engine.leaveGame(user.id);
-        socket.to(`voice:${roomCode}`).emit('voice:peer_left', { peerId: user.id });
-        socket.leave(`voice:${roomCode}`);
         socket.leave(`room:${roomCode}`);
 
         if (engine.players.length === 0 || engine.players.every(p => p.isBot)) {
@@ -620,130 +616,6 @@ export function setupSocketIO(server: http.Server) {
       respond({ success: true });
     });
 
-    /* --------------------- WEBRTC VOICE SIGNALING --------------------- */
-
-    /**
-     * Signaling is only relayed between two authenticated users who are BOTH
-     * seated in the SAME game and have BOTH explicitly joined that game's
-     * voice room. Cross-room and fake-peer signaling are rejected.
-     */
-    const resolveVoicePeer = (targetUserId: unknown): { ok: true; sockets: Set<string> } | { ok: false; error: string } => {
-      if (!targetUserId || typeof targetUserId !== 'string') {
-        return { ok: false, error: 'Invalid peer.' };
-      }
-      const ctx = requireRoomMembership(socket, activeGames);
-      if (!ctx.ok) return { ok: false, error: ctx.error };
-
-      const engine = ctx.value.engine;
-      const me = engine.players.find(p => p.userId === user.id);
-      const peer = engine.players.find(p => p.userId === targetUserId);
-
-      if (!peer) return { ok: false, error: 'Peer is not in your game.' };
-      if (!me?.voiceJoined || !peer.voiceJoined) {
-        return { ok: false, error: 'Both players must join voice first.' };
-      }
-
-      const sockets = userSocketMap.get(targetUserId);
-      if (!sockets || sockets.size === 0) return { ok: false, error: 'Peer is offline.' };
-      return { ok: true, sockets };
-    };
-
-    on('voice:join', (_payload, respond) => {
-      const ctx = requireRoomMembership(socket, activeGames);
-      if (!ctx.ok) return respond({ success: false, error: ctx.error });
-
-      const { engine, roomCode } = ctx.value;
-      if (!engine.settings.voiceEnabled) {
-        return respond({ success: false, error: 'Voice chat is disabled in this room.' });
-      }
-
-      socket.join(`voice:${roomCode}`);
-      const player = engine.players.find(p => p.userId === user.id);
-      if (player) {
-        player.voiceJoined = true;
-        // Joining voice only means "I can hear you". The microphone stays off
-        // until the player explicitly turns it on, which is also when the
-        // browser permission prompt appears.
-        player.micMuted = true;
-        broadcastGameState(engine);
-      }
-
-      socket.to(`voice:${roomCode}`).emit('voice:peer_joined', {
-        peerId: user.id,
-        displayName: user.displayName,
-      });
-      respond({ success: true });
-    });
-
-    on('voice:offer', (payload, respond) => {
-      const peer = resolveVoicePeer(payload?.to);
-      if (!peer.ok) return respond({ success: false, error: peer.error });
-      peer.sockets.forEach(sid =>
-        io.to(sid).emit('voice:offer', { from: user.id, offer: payload.offer })
-      );
-      respond({ success: true });
-    });
-
-    on('voice:answer', (payload, respond) => {
-      const peer = resolveVoicePeer(payload?.to);
-      if (!peer.ok) return respond({ success: false, error: peer.error });
-      peer.sockets.forEach(sid =>
-        io.to(sid).emit('voice:answer', { from: user.id, answer: payload.answer })
-      );
-      respond({ success: true });
-    });
-
-    on('voice:ice_candidate', (payload, respond) => {
-      const peer = resolveVoicePeer(payload?.to);
-      if (!peer.ok) return respond({ success: false, error: peer.error });
-      peer.sockets.forEach(sid =>
-        io.to(sid).emit('voice:ice_candidate', { from: user.id, candidate: payload.candidate })
-      );
-      respond({ success: true });
-    });
-
-    on('voice:mute', (payload, respond) => {
-      const ctx = requireRoomMembership(socket, activeGames);
-      if (!ctx.ok) return respond({ success: false, error: ctx.error });
-      const muted = !!payload?.muted;
-      const player = ctx.value.engine.players.find(p => p.userId === user.id);
-      if (player) {
-        player.micMuted = muted;
-        broadcastGameState(ctx.value.engine);
-      }
-      socket.to(`voice:${ctx.value.roomCode}`).emit('voice:peer_muted', { peerId: user.id, muted });
-      respond({ success: true });
-    });
-
-    on('voice:speaking', (payload, respond) => {
-      const ctx = requireRoomMembership(socket, activeGames);
-      if (!ctx.ok) return respond({ success: false, error: ctx.error });
-      const speaking = !!payload?.speaking;
-      const player = ctx.value.engine.players.find(p => p.userId === user.id);
-      if (player) player.speaking = speaking;
-      socket
-        .to(`voice:${ctx.value.roomCode}`)
-        .emit('voice:peer_speaking', { peerId: user.id, speaking });
-      respond({ success: true });
-    });
-
-    on('voice:leave', (_payload, respond) => {
-      const roomCode = socket.currentRoomCode;
-      if (!roomCode) return respond({ success: true });
-      socket.leave(`voice:${roomCode}`);
-      const engine = activeGames.get(roomCode);
-      if (engine) {
-        const player = engine.players.find(p => p.userId === user.id);
-        if (player) {
-          player.voiceJoined = false;
-          player.speaking = false;
-          broadcastGameState(engine);
-        }
-      }
-      socket.to(`voice:${roomCode}`).emit('voice:peer_left', { peerId: user.id });
-      respond({ success: true });
-    });
-
     /* --------------------------- DISCONNECT --------------------------- */
 
     socket.on('disconnect', () => {
@@ -766,7 +638,6 @@ export function setupSocketIO(server: http.Server) {
       // Another tab still holds this seat — leave game state untouched.
       if (!fullyOffline) return;
 
-      socket.to(`voice:${roomCode}`).emit('voice:peer_left', { peerId: user.id });
       notifyFriendsPresence(false);
 
       if (engine.phase === 'waiting') {

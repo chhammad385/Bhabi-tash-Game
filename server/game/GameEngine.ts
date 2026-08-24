@@ -116,7 +116,6 @@ export class GameEngine {
       maxPlayers: Math.min(8, Math.max(3, settings.maxPlayers || 4)),
       turnTimer: GameEngine.sanitizeTurnTimer(settings.turnTimer),
       isPrivate: settings.isPrivate ?? true,
-      voiceEnabled: settings.voiceEnabled ?? true,
       chatEnabled: settings.chatEnabled ?? true,
       spectatorsAllowed: settings.spectatorsAllowed ?? false,
       botDifficulty: settings.botDifficulty || 'normal',
@@ -191,9 +190,6 @@ export class GameEngine {
       isReady: isHost, // Host is ready by default
       connected: true,
       socketId: user.socketId,
-      speaking: false,
-      voiceJoined: false,
-      micMuted: true,
     };
 
     this.players.push(newPlayer);
@@ -234,8 +230,6 @@ export class GameEngine {
 
     player.connected = false;
     player.status = 'disconnected';
-    player.voiceJoined = false;
-    player.speaking = false;
 
     if (player.disconnectTimeout) clearTimeout(player.disconnectTimeout);
     player.disconnectTimeout = setTimeout(() => {
@@ -300,7 +294,6 @@ export class GameEngine {
       isHost: false,
       isReady: true,
       connected: true,
-      speaking: false,
     };
 
     this.players.push(botPlayer);
@@ -447,7 +440,6 @@ export class GameEngine {
       this.settings.turnTimer = safeTimer;
     }
     if (newSettings.isPrivate !== undefined) this.settings.isPrivate = newSettings.isPrivate;
-    if (newSettings.voiceEnabled !== undefined) this.settings.voiceEnabled = newSettings.voiceEnabled;
     if (newSettings.chatEnabled !== undefined) this.settings.chatEnabled = newSettings.chatEnabled;
     if (newSettings.botDifficulty !== undefined) this.settings.botDifficulty = newSettings.botDifficulty;
 
@@ -1546,9 +1538,6 @@ export class GameEngine {
       isReady: p.isReady,
       isBhabhi: p.isBhabhi,
       connected: p.connected,
-      speaking: p.speaking,
-      voiceJoined: p.voiceJoined,
-      micMuted: p.micMuted,
     }));
 
     return {

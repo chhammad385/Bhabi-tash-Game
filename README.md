@@ -32,16 +32,6 @@ Vercel (frontend) + Render (backend) + Neon PostgreSQL (database).
 Three difficulty levels (easy / normal / hard) with heuristic play: void-suit
 management, safe discarding, and Tochoo avoidance.
 
-### Voice chat (WebRTC)
-- Peer-to-peer audio mesh using free Google STUN servers.
-- **Opt-in only** — the microphone is never enabled automatically; `getUserMedia`
-  runs solely in response to the user pressing *Join Voice*.
-- Signaling is authenticated and restricted to peers in the same game room.
-- Voice-activity detection drives the speaking indicators.
-- No TURN server is configured (none is free), so a small number of users behind
-  restrictive NATs will see *"Voice connection could not be established."*
-  The game itself is unaffected when voice fails.
-
 ### Social & stats
 - Unique public Player IDs (e.g. `BHABHI-7K29X`) for friend requests.
 - Friends list with presence, and **friends-only** game invitations.
@@ -56,9 +46,7 @@ Browser (Vercel)                Render Web Service            Neon
 ┌────────────────┐   REST/WS   ┌────────────────────┐  SQL  ┌──────────┐
 │ React + Vite   │────────────▶│ Express + Socket.IO│──────▶│ Postgres │
 │                │             │ GameEngine (memory)│       └──────────┘
-└────────┬───────┘             └────────────────────┘
-         │  WebRTC audio (peer-to-peer, STUN-assisted)
-         └──────────────▶ other browsers
+└────────────────┘             └────────────────────┘
 ```
 
 **Live game state lives in server memory**, not the database. PostgreSQL stores

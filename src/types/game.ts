@@ -27,9 +27,6 @@ export interface PublicPlayer {
   isReady: boolean;
   isBhabhi?: boolean;
   connected: boolean;
-  speaking?: boolean;
-  voiceJoined?: boolean;
-  micMuted?: boolean;
 }
 
 export interface PlayedTrickCard {
@@ -75,7 +72,6 @@ export interface GameSettings {
   maxPlayers: number;        // 3 to 8
   turnTimer: number;         // 15, 30, 45, 60, or 0 (unlimited)
   isPrivate: boolean;
-  voiceEnabled: boolean;
   chatEnabled: boolean;
   spectatorsAllowed: boolean;
   botDifficulty: 'easy' | 'normal' | 'hard';
