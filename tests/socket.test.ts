@@ -717,6 +717,89 @@ export async function runSocketTests() {
   }
 
   /* ---------------------------------------------------------------- */
+  section('Matchmaking honours the timers a player asked for');
+
+  {
+    // Start from a clean slate: these three are still sitting in earlier rooms.
+    await emit(A, 'room:leave');
+    await emit(B, 'room:leave');
+    await emit(C, 'room:leave');
+    await emit(A, 'matchmaking:leave');
+    await emit(B, 'matchmaking:leave');
+    await emit(C, 'matchmaking:leave');
+
+    const fast = { desiredPlayers: 3, turnTimer: 15, reviewTimer: 15 };
+    const slow = { desiredPlayers: 3, turnTimer: 60, reviewTimer: 90 };
+
+    const aQueued = await emit(A, 'matchmaking:join', fast);
+    assert(aQueued.success && !aQueued.matched, 'the first player asking for fast timers waits');
+    assertEqual(aQueued.queuePosition, 1, 'A is alone in the fast queue');
+    assertEqual(aQueued.turnTimer, 15, 'the server echoes back the turn timer A asked for');
+    assertEqual(aQueued.reviewTimer, 15, 'the server echoes back the review timer A asked for');
+
+    /*
+     * The point of the whole change: somebody who asked for a slow game must
+     * not be dropped into a fast one. If the queues were shared this would
+     * come back as position 2.
+     */
+    const bQueued = await emit(B, 'matchmaking:join', slow);
+    assertEqual(
+      bQueued.queuePosition,
+      1,
+      'a player who asked for different timers waits separately, not alongside A'
+    );
+
+    await emit(B, 'matchmaking:leave');
+
+    const bAgain = await emit(B, 'matchmaking:join', fast);
+    assertEqual(bAgain.queuePosition, 2, 'asking for the same timers as A puts B in A/s queue');
+
+    const matchedOnA = nextEvent(A, 'matchmaking:matched', 4000);
+    const cQueued = await emit(C, 'matchmaking:join', fast);
+    assert(cQueued.matched === true, 'the third player with matching timers completes the table');
+
+    const match = await matchedOnA;
+    assert(match !== null, 'the waiting players are told the match is on');
+    assertEqual(match?.state?.settings?.turnTimer, 15, 'the matched room uses the requested turn timer');
+    assertEqual(
+      match?.state?.settings?.reviewTimer,
+      15,
+      'the matched room uses the requested Sar review timer'
+    );
+    assertEqual(match?.state?.players?.length, 3, 'all three queued players are seated');
+
+    await emit(A, 'room:leave');
+    await emit(B, 'room:leave');
+    await emit(C, 'room:leave');
+
+    /*
+     * Nonsense values must not carve out a private queue that nobody else can
+     * ever land in. They are normalised first, then used as the key.
+     */
+    const junk = await emit(A, 'matchmaking:join', {
+      desiredPlayers: 3,
+      turnTimer: 999,
+      reviewTimer: 9999,
+    });
+    assertEqual(junk.turnTimer, 30, 'an impossible turn timer falls back to the default');
+    assertEqual(junk.reviewTimer, 90, 'an impossible review timer falls back to the default');
+
+    const sane = await emit(B, 'matchmaking:join', {
+      desiredPlayers: 3,
+      turnTimer: 30,
+      reviewTimer: 90,
+    });
+    assertEqual(
+      sane.queuePosition,
+      2,
+      'a junk request lands in the same queue as the equivalent sane one'
+    );
+
+    await emit(A, 'matchmaking:leave');
+    await emit(B, 'matchmaking:leave');
+  }
+
+  /* ---------------------------------------------------------------- */
   section('REST brute-force protection');
 
   {

@@ -4,6 +4,7 @@ import { Play, UserPlus, Bot, Settings, LogOut, Check, Copy, Share2, Crown, Mic,
 import { useGame } from '../../context/GameContext';
 import { useAuth } from '../../context/AuthContext';
 import { ReviewTimerPicker } from '../common/ReviewTimerPicker';
+import { TurnTimerPicker } from '../common/TurnTimerPicker';
 
 interface GameLobbyProps {
   onOpenFriends: () => void;
@@ -365,29 +366,10 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ onOpenFriends }) => {
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-2">Turn Timer:</label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: '15s', val: 15 },
-                  { label: '30s', val: 30 },
-                  { label: '45s', val: 45 },
-                  { label: '60s', val: 60 },
-                ].map((timer) => (
-                  <button
-                    key={timer.val}
-                    onClick={() => updateSettings({ turnTimer: timer.val })}
-                    className={`py-1.5 rounded-lg text-xs font-bold transition ${
-                      gameState.settings.turnTimer === timer.val
-                        ? 'bg-indigo-600 text-white shadow-md'
-                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    }`}
-                  >
-                    {timer.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <TurnTimerPicker
+              value={gameState.settings.turnTimer}
+              onChange={(turnTimer) => updateSettings({ turnTimer })}
+            />
 
             <ReviewTimerPicker
               value={gameState.settings.reviewTimer}

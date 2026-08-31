@@ -3,6 +3,7 @@ import { Play, Plus, KeyRound, Bot, Sparkles, Shield, Users, Clock, Mic, Check }
 import { useGame } from '../../context/GameContext';
 import { GameSettings } from '../../types/game';
 import { ReviewTimerPicker } from '../common/ReviewTimerPicker';
+import { TurnTimerPicker } from '../common/TurnTimerPicker';
 
 interface HomeViewProps {
   onOpenRules: () => void;
@@ -40,9 +41,14 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
   const [showBotModal, setShowBotModal] = useState(false);
   const [botCount, setBotCount] = useState(3); // 3 bots -> 4 players total
   const [botDifficulty, setBotDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
+  const [botTurnTimer, setBotTurnTimer] = useState(30);
+  const [botReviewTimer, setBotReviewTimer] = useState(90);
 
   // Matchmaking select
   const [selectedMatchmakingCount, setSelectedMatchmakingCount] = useState(4);
+  const [matchTurnTimer, setMatchTurnTimer] = useState(30);
+  const [matchReviewTimer, setMatchReviewTimer] = useState(30);
+  const [showMatchTimers, setShowMatchTimers] = useState(false);
 
   const handleJoinByCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,8 +71,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
     const totalPlayers = botCount + 1;
     const res = await createRoom({
       maxPlayers: totalPlayers,
-      turnTimer: 30,
-      reviewTimer: 90,
+      turnTimer: botTurnTimer,
+      reviewTimer: botReviewTimer,
       isPrivate: true,
       botDifficulty,
     });
@@ -148,6 +154,43 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
                     </button>
                   ))}
                 </div>
+
+                {/*
+                  Matchmaking pairs players on these terms, so what you pick
+                  here is also who you can be matched with. Tucked behind a
+                  toggle because most people just want the usual game.
+                */}
+                <button
+                  id="home-toggle-match-timers-btn"
+                  onClick={() => setShowMatchTimers(!showMatchTimers)}
+                  className="mt-2.5 w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/70 text-[11px] text-slate-300 font-medium transition"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    Timers: {matchTurnTimer}s turn / {matchReviewTimer}s review
+                  </span>
+                  <span className="text-slate-500">{showMatchTimers ? '▲' : '▼'}</span>
+                </button>
+
+                {showMatchTimers && (
+                  <div className="mt-2 flex flex-col gap-2.5 p-2.5 rounded-lg bg-slate-950/50 border border-slate-800">
+                    <TurnTimerPicker
+                      value={matchTurnTimer}
+                      onChange={setMatchTurnTimer}
+                      accent="amber"
+                      compact
+                    />
+                    <ReviewTimerPicker
+                      value={matchReviewTimer}
+                      onChange={setMatchReviewTimer}
+                      accent="amber"
+                      compact
+                      presets={[15, 30, 60, 90]}
+                      allowCustom={false}
+                      hint="You are only matched with players who chose the same timers, so the usual settings find a game fastest."
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -174,7 +217,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
             ) : (
               <button
                 id="home-start-matchmaking-btn"
-                onClick={() => startMatchmaking(selectedMatchmakingCount)}
+                onClick={() =>
+                  startMatchmaking(selectedMatchmakingCount, matchTurnTimer, matchReviewTimer)
+                }
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition flex items-center justify-center gap-2"
               >
                 <Play className="w-4 h-4 fill-slate-950" />
@@ -330,30 +375,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
               </div>
             </div>
 
-            {/* Turn Timer */}
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-2">Turn Timer:</label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: '15s', val: 15 },
-                  { label: '30s', val: 30 },
-                  { label: '45s', val: 45 },
-                  { label: '60s', val: 60 },
-                ].map((timer) => (
-                  <button
-                    key={timer.val}
-                    onClick={() => setCreateSettings({ ...createSettings, turnTimer: timer.val })}
-                    className={`py-1.5 rounded-lg text-xs font-bold transition ${
-                      createSettings.turnTimer === timer.val
-                        ? 'bg-indigo-600 text-white shadow-md'
-                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    }`}
-                  >
-                    {timer.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <TurnTimerPicker
+              value={createSettings.turnTimer}
+              onChange={(turnTimer) => setCreateSettings({ ...createSettings, turnTimer })}
+            />
 
             <ReviewTimerPicker
               value={createSettings.reviewTimer}
@@ -450,6 +475,18 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
                 ))}
               </div>
             </div>
+
+            <TurnTimerPicker
+              value={botTurnTimer}
+              onChange={setBotTurnTimer}
+              accent="emerald"
+            />
+
+            <ReviewTimerPicker
+              value={botReviewTimer}
+              onChange={setBotReviewTimer}
+              accent="emerald"
+            />
 
             <div className="flex items-center gap-3 pt-2">
               <button

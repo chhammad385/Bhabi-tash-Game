@@ -34,7 +34,21 @@ export function emitToUser(userId: string, event: string, payload: unknown): boo
 export const activeGames = new Map<string, GameEngine>();
 /** userId -> set of that user's live socket ids (multi-tab safe). */
 export const userSocketMap = new Map<string, Set<string>>();
-export const matchmakingQueues = new Map<number, Set<string>>();
+/*
+ * Public matchmaking queues.
+ *
+ * The key is the whole set of things a player asked for — table size, turn
+ * timer and Sar review timer — because those are the terms of the game they
+ * agreed to. Pooling everyone into one queue per table size would be quicker
+ * to fill but would drop a player who asked for 15-second turns into a
+ * 60-second table, which is not the game they chose.
+ */
+export const matchmakingQueues = new Map<string, Set<string>>();
+
+/** Builds the queue key for one set of requested game terms. */
+function matchmakingKey(playerCount: number, turnTimer: number, reviewTimer: number): string {
+  return `${playerCount}|${turnTimer}|${reviewTimer}`;
+}
 
 /** Games with no connected humans are reaped after this long. */
 const ABANDONED_GAME_TTL_MS = 10 * 60 * 1000;
@@ -477,10 +491,16 @@ export function setupSocketIO(server: http.Server) {
         ? Math.max(3, Math.min(8, Math.trunc(desired)))
         : 4;
 
-      let queue = matchmakingQueues.get(targetCount);
+      // Whatever the client asks for, the engine's own rules decide what is
+      // allowed; the sanitized values are what the queue is keyed on.
+      const turnTimer = GameEngine.sanitizeTurnTimer(payload?.turnTimer);
+      const reviewTimer = GameEngine.sanitizeReviewTimer(payload?.reviewTimer);
+      const key = matchmakingKey(targetCount, turnTimer, reviewTimer);
+
+      let queue = matchmakingQueues.get(key);
       if (!queue) {
         queue = new Set<string>();
-        matchmakingQueues.set(targetCount, queue);
+        matchmakingQueues.set(key, queue);
       }
       // Never queue the same user twice.
       for (const q of matchmakingQueues.values()) q.delete(user.id);
@@ -496,13 +516,20 @@ export function setupSocketIO(server: http.Server) {
           gameId,
           roomCode,
           queuedUserIds[0],
-          { maxPlayers: targetCount, isPrivate: false, turnTimer: 30 },
+          { maxPlayers: targetCount, isPrivate: false, turnTimer, reviewTimer },
           updated => broadcastGameState(updated)
         );
 
         activeGames.set(roomCode, engine);
         roomEmptySince.delete(roomCode);
 
+        /*
+         * Seat everybody FIRST, then tell them. Announcing inside the seating
+         * loop handed the first player a snapshot of a table containing only
+         * themselves, so the lobby flashed "1 player" until the next broadcast
+         * corrected it.
+         */
+        const matchedSockets: AuthenticatedSocket[] = [];
         queuedUserIds.forEach(userId => {
           const sockets = userSocketMap.get(userId);
           if (!sockets) return;
@@ -519,18 +546,30 @@ export function setupSocketIO(server: http.Server) {
             });
             clientSocket.currentRoomCode = roomCode;
             clientSocket.join(`room:${roomCode}`);
-            clientSocket.emit('matchmaking:matched', {
-              roomCode,
-              state: engine.getSanitizedState(clientSocket.user.id),
-            });
+            matchedSockets.push(clientSocket);
           }
         });
 
+        matchedSockets.forEach(clientSocket => {
+          clientSocket.emit('matchmaking:matched', {
+            roomCode,
+            state: engine.getSanitizedState(clientSocket.user!.id),
+          });
+        });
+
         broadcastGameState(engine);
-        return respond({ success: true, matched: true, roomCode });
+        if (queue.size === 0) matchmakingQueues.delete(key);
+        return respond({ success: true, matched: true, roomCode, turnTimer, reviewTimer });
       }
 
-      respond({ success: true, matched: false, queuePosition: queue.size, targetCount });
+      respond({
+        success: true,
+        matched: false,
+        queuePosition: queue.size,
+        targetCount,
+        turnTimer,
+        reviewTimer,
+      });
     });
 
     on('matchmaking:leave', (_payload, respond) => {
@@ -848,11 +887,11 @@ export function setupSocketIO(server: http.Server) {
       }
       if (set.size === 0) userSocketMap.delete(userId);
     }
-    for (const [count, queue] of matchmakingQueues.entries()) {
+    for (const [key, queue] of matchmakingQueues.entries()) {
       for (const uid of queue) {
         if (!userSocketMap.has(uid)) queue.delete(uid);
       }
-      if (queue.size === 0) matchmakingQueues.delete(count);
+      if (queue.size === 0) matchmakingQueues.delete(key);
     }
   }, REAP_INTERVAL_MS);
 

@@ -322,9 +322,16 @@ export function runBotAITests() {
     ['normal', 'normal', 'hard', 'hard'],
   ];
 
+  /*
+   * The sample has to be big enough that ordinary luck cannot decide the
+   * result. Hard bots end up as Bhabhi about 30% of the time; across 1000
+   * matches the spread is roughly 1.5 points, so a 40% threshold sits about
+   * seven standard deviations away and only a genuine regression can trip it.
+   * A match costs about a millisecond, so this is cheap insurance.
+   */
   let hardLost = 0;
   let decided = 0;
-  const MATCHES = 120;
+  const MATCHES = 1000;
   for (let i = 0; i < MATCHES; i++) {
     const r = runMatch(seatings[i % seatings.length]);
     if (!r.finished || !r.bhabhiId) continue;
@@ -335,8 +342,8 @@ export function runBotAITests() {
   const lossRate = hardLost / Math.max(1, decided);
   assertEqual(decided, MATCHES, 'every hard-vs-normal match is decided');
   assert(
-    lossRate < 0.42,
-    `hard bots lose less often than normal bots ` +
-      `(hard was Bhabhi in ${(lossRate * 100).toFixed(1)}% of ${decided} matches, want under 42%)`
+    lossRate < 0.4,
+    `hard bots lose clearly less often than normal bots ` +
+      `(hard was Bhabhi in ${(lossRate * 100).toFixed(1)}% of ${decided} matches, want under 40%)`
   );
 }

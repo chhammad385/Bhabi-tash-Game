@@ -54,7 +54,7 @@ interface GameContextType {
   kickPlayer: (targetUserId: string) => void;
   updateSettings: (newSettings: Partial<GameSettings>) => void;
   playAgain: () => void;
-  startMatchmaking: (playerCount: number) => void;
+  startMatchmaking: (playerCount: number, turnTimer: number, reviewTimer: number) => void;
   cancelMatchmaking: () => void;
   sendChatMessage: (text: string) => void;
   dismissInvite: () => void;
@@ -416,10 +416,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     emitWithAck('game:play_again').then(reportIfFailed);
   };
 
-  const startMatchmaking = (playerCount: number) => {
+  const startMatchmaking = (playerCount: number, turnTimer: number, reviewTimer: number) => {
     setMatchmakingTarget(playerCount);
     setIsMatchmaking(true);
-    emitWithAck('matchmaking:join', { desiredPlayers: playerCount }).then((res) => {
+    // The queue is keyed on these, so a player only ever meets opponents who
+    // asked for the same table size and the same timers.
+    emitWithAck('matchmaking:join', {
+      desiredPlayers: playerCount,
+      turnTimer,
+      reviewTimer,
+    }).then((res) => {
       if (res?.matched) {
         setIsMatchmaking(false);
       } else if (res?.queuePosition) {
