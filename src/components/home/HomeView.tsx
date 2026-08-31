@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Play, Plus, KeyRound, Bot, Sparkles, Shield, Users, Clock, Mic, Check } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 import { GameSettings } from '../../types/game';
+import { ReviewTimerPicker } from '../common/ReviewTimerPicker';
 
 interface HomeViewProps {
   onOpenRules: () => void;
@@ -28,6 +29,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
   const [createSettings, setCreateSettings] = useState<GameSettings>({
     maxPlayers: 4,
     turnTimer: 30,
+    reviewTimer: 90,
     isPrivate: true,
     chatEnabled: true,
     spectatorsAllowed: false,
@@ -64,6 +66,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
     const res = await createRoom({
       maxPlayers: totalPlayers,
       turnTimer: 30,
+      reviewTimer: 90,
       isPrivate: true,
       botDifficulty,
     });
@@ -351,6 +354,11 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenRules }) => {
                 ))}
               </div>
             </div>
+
+            <ReviewTimerPicker
+              value={createSettings.reviewTimer}
+              onChange={(reviewTimer) => setCreateSettings({ ...createSettings, reviewTimer })}
+            />
 
             {/* Toggles */}
             <div className="flex items-center justify-between py-2 border-y border-slate-800/80">

@@ -87,5 +87,90 @@ const p1Sanitized = engine.getSanitizedState('user-1');
 assert(p1Sanitized.yourCards.length > 0, 'Player receives their own hand');
 assert(p1Sanitized.players.every((p: any) => p.cards === undefined), 'State payload does not expose hidden opponent cards');
 
+// 5. Sar review timer is the host's choice, not a fixed 90 seconds
+console.log('');
+console.log('--- 5. Testing Host-Configurable Sar Review Timer ---');
+
+assert(
+  new GameEngine('rt-default', 'RT0000', 'u').settings.reviewTimer === 90,
+  'a room with no review timer given falls back to 90 seconds'
+);
+assert(
+  new GameEngine('rt-set', 'RT0001', 'u', { reviewTimer: 12 }).settings.reviewTimer === 12,
+  'a room keeps the review timer it was created with'
+);
+assert(
+  GameEngine.sanitizeReviewTimer(4) === 90 && GameEngine.sanitizeReviewTimer(301) === 90,
+  'a review timer outside 5-300 seconds falls back to the default'
+);
+assert(
+  GameEngine.sanitizeReviewTimer('abc') === 90 &&
+    GameEngine.sanitizeReviewTimer(NaN) === 90 &&
+    GameEngine.sanitizeReviewTimer(Infinity) === 90 &&
+    GameEngine.sanitizeReviewTimer(null) === 90,
+  'a review timer that is not a usable number falls back to the default'
+);
+assert(
+  GameEngine.sanitizeReviewTimer(45.9) === 45,
+  'a fractional review timer is truncated to whole seconds'
+);
+
+const settingsEngine = new GameEngine('rt-update', 'RT0002', 'host-1');
+settingsEngine.addPlayer({ id: 'host-1', playerId: 'BHABHI-9001', username: 'host', displayName: 'Host', avatar: 'avatar-1' });
+settingsEngine.addPlayer({ id: 'guest-1', playerId: 'BHABHI-9002', username: 'guest', displayName: 'Guest', avatar: 'avatar-2' });
+
+assert(
+  settingsEngine.updateSettings('host-1', { reviewTimer: 7 }).success &&
+    settingsEngine.settings.reviewTimer === 7,
+  'the host can set any review timer inside the allowed range'
+);
+assert(
+  settingsEngine.updateSettings('host-1', { reviewTimer: 250 }).success &&
+    settingsEngine.settings.reviewTimer === 250,
+  'the host can set a long review timer, right up to the maximum'
+);
+assert(
+  !settingsEngine.updateSettings('host-1', { reviewTimer: 4 }).success &&
+    !settingsEngine.updateSettings('host-1', { reviewTimer: 301 }).success &&
+    settingsEngine.settings.reviewTimer === 250,
+  'an out-of-range review timer is refused and the current value is kept'
+);
+assert(
+  !settingsEngine.updateSettings('guest-1', { reviewTimer: 30 }).success &&
+    settingsEngine.settings.reviewTimer === 250,
+  'a player who is not the host cannot change the review timer'
+);
+
+/*
+ * The value has to actually drive the countdown. Play one full trick with a
+ * short timer and check the deadline the players are shown matches what the
+ * host asked for, rather than the old fixed 90 seconds.
+ */
+const reviewEngine = new GameEngine('rt-live', 'RT0003', 'host-2', { maxPlayers: 3, reviewTimer: 8 });
+reviewEngine.addPlayer({ id: 'host-2', playerId: 'BHABHI-9101', username: 'h2', displayName: 'H2', avatar: 'avatar-1' });
+reviewEngine.addPlayer({ id: 'p2', playerId: 'BHABHI-9102', username: 'p2', displayName: 'P2', avatar: 'avatar-2' });
+reviewEngine.addPlayer({ id: 'p3', playerId: 'BHABHI-9103', username: 'p3', displayName: 'P3', avatar: 'avatar-3' });
+reviewEngine.players.forEach(p => (p.isReady = true));
+reviewEngine.startGame('host-2');
+
+let reviewGuard = 0;
+while (reviewEngine.phase === 'playing' && reviewGuard++ < 20) {
+  const actor = reviewEngine.players.find(p => p.id === reviewEngine.currentTurnPlayerId)!;
+  const legal = RuleValidator.getLegalCards(
+    actor.cards,
+    (reviewEngine as any).isFirstMoveOfGame,
+    reviewEngine.leadSuit
+  );
+  reviewEngine.playCard(actor.id, legal[0].id);
+}
+
+assert(reviewEngine.phase === 'trick_review', 'a completed Sar opens the review screen');
+const secondsShown = Math.round(((reviewEngine.reviewExpiresAt || 0) - Date.now()) / 1000);
+assert(
+  secondsShown === 8,
+  `the review counts down from the host setting, not a fixed 90 (showed ${secondsShown}s)`
+);
+reviewEngine.destroy();
+
 console.log('\n🎉 ALL 12 GAME ENGINE TESTS PASSED PERFECTLY!\n');
 }

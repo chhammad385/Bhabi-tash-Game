@@ -77,6 +77,12 @@ export interface CompletedTrickInfo {
 export interface GameSettings {
   maxPlayers: number;        // 3 to 8
   turnTimer: number;         // 15, 30, 45, 60, or 0 (unlimited)
+  /**
+   * Seconds the completed-Sar review stays on screen before it advances on its
+   * own. The host picks this; anything from 5 to 300 seconds is allowed. It is
+   * only a backstop — the review ends as soon as every active player confirms.
+   */
+  reviewTimer: number;
   isPrivate: boolean;
   chatEnabled: boolean;
   spectatorsAllowed: boolean;
@@ -124,7 +130,7 @@ export interface PublicGameState {
   discardPileCount: number;
   stateVersion: number;
   turnExpiresAt: number | null;
-  reviewExpiresAt: number | null; // 1.5 min (90s) trick review timeout
+  reviewExpiresAt: number | null; // when the trick review advances by itself
   acknowledgedPlayerIds: string[]; // Players who pressed Space / confirmed seen
   lastCompletedTrick: CompletedTrickInfo | null;
   sarHistory: CompletedTrickInfo[]; // All completed tricks (sars) in the current game

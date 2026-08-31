@@ -3,6 +3,7 @@ import { VoiceControls, VoiceErrorBanner } from '../common/VoiceControls';
 import { Play, UserPlus, Bot, Settings, LogOut, Check, Copy, Share2, Crown, Mic, ShieldAlert, MicOff } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 import { useAuth } from '../../context/AuthContext';
+import { ReviewTimerPicker } from '../common/ReviewTimerPicker';
 
 interface GameLobbyProps {
   onOpenFriends: () => void;
@@ -387,6 +388,11 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ onOpenFriends }) => {
                 ))}
               </div>
             </div>
+
+            <ReviewTimerPicker
+              value={gameState.settings.reviewTimer}
+              onChange={(reviewTimer) => updateSettings({ reviewTimer })}
+            />
 
             <div className="pt-2">
               <button

@@ -109,9 +109,27 @@ function runMatch(seats: ('easy' | 'normal' | 'hard')[]) {
       job.fn();
     }
 
+    /*
+     * The table shows how many Sars of each suit have been discarded, counting
+     * only the clean ones — a Sar that ended in a Thulla goes into a player's
+     * hand, not the discard pile. Gather the same numbers here so the tests can
+     * prove that definition holds.
+     */
+    const perSuit: Record<string, number> = { S: 0, H: 0, D: 0, C: 0 };
+    let cardsInCleanSars = 0;
+    for (const sar of engine.sarHistory) {
+      if (sar.isTochoo || !sar.leadSuit) continue;
+      perSuit[sar.leadSuit]++;
+      cardsInCleanSars += sar.cards.length;
+    }
+
     const result = {
       finished: engine.phase === 'game_over',
       tricks: engine.sarHistory.length,
+      perSuit,
+      cardsInCleanSars,
+      cleanSars: perSuit.S + perSuit.H + perSuit.D + perSuit.C,
+      discardPileCount: engine.discardPileCount,
       bhabhiId: engine.bhabhiPlayerId,
       rankings: engine.rankings.length,
       bhabhiCount: engine.rankings.filter(r => r.isBhabhi).length,
@@ -254,6 +272,40 @@ export function runBotAITests() {
       assertEqual(finished, RUNS, `${seatCount}-player ${difficulty} matches all reach an end`);
       assertEqual(consistent, RUNS, `${seatCount}-player ${difficulty} matches end with a sane result`);
     }
+  }
+
+  section('Sar tally — discarded Sars by suit');
+
+  /*
+   * The table's per-suit counter only counts Sars that were discarded. If that
+   * definition were wrong the counter would quietly mislead: a player would
+   * read a suit as spent while those cards were sitting in somebody's hand.
+   * Every card in a clean Sar, and no other, must reach the discard pile.
+   */
+  {
+    const RUNS = 25;
+    let agreed = 0;
+    let sawThulla = 0;
+    let sawEverySuit = 0;
+    for (let i = 0; i < RUNS; i++) {
+      const r = runMatch(['hard', 'hard', 'hard', 'hard']);
+      if (r.cardsInCleanSars === r.discardPileCount) agreed++;
+      if (r.tricks > r.cleanSars) sawThulla++;
+      if (['S', 'H', 'D', 'C'].every(suit => r.perSuit[suit] > 0)) sawEverySuit++;
+    }
+    assertEqual(
+      agreed,
+      RUNS,
+      'the cards in clean Sars are exactly the cards in the discard pile'
+    );
+    assert(
+      sawThulla > 0,
+      `Sars ending in a Thulla are excluded from the tally, and games containing them were actually played (${sawThulla}/${RUNS})`
+    );
+    assert(
+      sawEverySuit > 0,
+      `all four suits get counted separately over a full game (${sawEverySuit}/${RUNS} games discarded a Sar in every suit)`
+    );
   }
 
   section('Bot AI — hard really is harder');

@@ -109,6 +109,29 @@ export class GameEngine {
       : GameEngine.DEFAULT_TURN_TIMER;
   }
 
+  /**
+   * Bounds on the completed-Sar review timer (seconds). The host names the
+   * value, so this is only a guard against nonsense and against a number so
+   * large that one idle player could hold the table hostage.
+   */
+  public static readonly MIN_REVIEW_TIMER = 5;
+  public static readonly MAX_REVIEW_TIMER = 300;
+  private static readonly DEFAULT_REVIEW_TIMER = 90;
+
+  /** Suggested values offered in the UI; any whole number in range is accepted. */
+  public static readonly SUGGESTED_REVIEW_TIMERS = [5, 10, 15, 30, 45, 60, 90, 120] as const;
+
+  /** Coerces a client-supplied review timer to a whole number of seconds in range. */
+  public static sanitizeReviewTimer(value: unknown): number {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n)) return GameEngine.DEFAULT_REVIEW_TIMER;
+    const rounded = Math.trunc(n);
+    if (rounded < GameEngine.MIN_REVIEW_TIMER || rounded > GameEngine.MAX_REVIEW_TIMER) {
+      return GameEngine.DEFAULT_REVIEW_TIMER;
+    }
+    return rounded;
+  }
+
   constructor(
     id: string,
     roomCode: string,
@@ -122,6 +145,7 @@ export class GameEngine {
     this.settings = {
       maxPlayers: Math.min(8, Math.max(3, settings.maxPlayers || 4)),
       turnTimer: GameEngine.sanitizeTurnTimer(settings.turnTimer),
+      reviewTimer: GameEngine.sanitizeReviewTimer(settings.reviewTimer),
       isPrivate: settings.isPrivate ?? true,
       chatEnabled: settings.chatEnabled ?? true,
       spectatorsAllowed: settings.spectatorsAllowed ?? false,
@@ -452,6 +476,20 @@ export class GameEngine {
       }
       this.settings.turnTimer = safeTimer;
     }
+    if (newSettings.reviewTimer !== undefined) {
+      const asked = Math.trunc(Number(newSettings.reviewTimer));
+      if (
+        !Number.isFinite(asked) ||
+        asked < GameEngine.MIN_REVIEW_TIMER ||
+        asked > GameEngine.MAX_REVIEW_TIMER
+      ) {
+        return {
+          success: false,
+          error: `Sar review timer must be between ${GameEngine.MIN_REVIEW_TIMER} and ${GameEngine.MAX_REVIEW_TIMER} seconds.`,
+        };
+      }
+      this.settings.reviewTimer = asked;
+    }
     if (newSettings.isPrivate !== undefined) this.settings.isPrivate = newSettings.isPrivate;
     if (newSettings.chatEnabled !== undefined) this.settings.chatEnabled = newSettings.chatEnabled;
     if (newSettings.botDifficulty !== undefined) this.settings.botDifficulty = newSettings.botDifficulty;
@@ -678,12 +716,12 @@ export class GameEngine {
 
     // Initialize Spacebar acknowledgment state (1.5 minutes = 90 seconds timeout)
     this.acknowledgedPlayerIds = [];
-    this.reviewExpiresAt = Date.now() + 90000;
+    this.reviewExpiresAt = Date.now() + this.reviewTimeoutMs();
 
     this.clearReviewTimer();
     this.reviewTimerId = setTimeout(() => {
       this.finishTrickReview();
-    }, 90000);
+    }, this.reviewTimeoutMs());
 
     this.notifyStateChange();
     this.scheduleBotAcknowledgments();
@@ -759,12 +797,12 @@ export class GameEngine {
 
     // Initialize Spacebar acknowledgment state (1.5 minutes = 90 seconds timeout)
     this.acknowledgedPlayerIds = [];
-    this.reviewExpiresAt = Date.now() + 90000;
+    this.reviewExpiresAt = Date.now() + this.reviewTimeoutMs();
 
     this.clearReviewTimer();
     this.reviewTimerId = setTimeout(() => {
       this.finishTrickReview();
-    }, 90000);
+    }, this.reviewTimeoutMs());
 
     this.notifyStateChange();
     this.scheduleBotAcknowledgments();
@@ -817,12 +855,12 @@ export class GameEngine {
 
     // Initialize Spacebar acknowledgment state (1.5 minutes = 90 seconds timeout)
     this.acknowledgedPlayerIds = [];
-    this.reviewExpiresAt = Date.now() + 90000;
+    this.reviewExpiresAt = Date.now() + this.reviewTimeoutMs();
 
     this.clearReviewTimer();
     this.reviewTimerId = setTimeout(() => {
       this.finishTrickReview();
-    }, 90000);
+    }, this.reviewTimeoutMs());
 
     this.notifyStateChange();
     this.scheduleBotAcknowledgments();
@@ -879,6 +917,11 @@ export class GameEngine {
   private clearBotAcknowledgeTimers() {
     this.botAcknowledgeTimerIds.forEach(t => clearTimeout(t));
     this.botAcknowledgeTimerIds = [];
+  }
+
+  /** How long a completed Sar stays on screen before advancing by itself. */
+  private reviewTimeoutMs(): number {
+    return GameEngine.sanitizeReviewTimer(this.settings.reviewTimer) * 1000;
   }
 
   private clearReviewTimer() {

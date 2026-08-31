@@ -14,7 +14,10 @@ export const TrickReviewOverlay: React.FC<TrickReviewOverlayProps> = ({
   userId,
   onAcknowledge,
 }) => {
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(90);
+  // The host chooses how long the review lasts, so start the countdown from
+  // their setting rather than a number baked in here.
+  const reviewSeconds = gameState.settings.reviewTimer;
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(reviewSeconds);
 
   const trick = gameState.lastCompletedTrick;
   const myPlayer = gameState.players.find((p) => p.userId === userId || p.id === userId);
@@ -28,10 +31,10 @@ export const TrickReviewOverlay: React.FC<TrickReviewOverlayProps> = ({
   ).length;
   const totalNeeded = activePlayers.length;
 
-  // Countdown timer for 1.5 min (90s)
+  // Countdown to the host's chosen auto-advance deadline.
   useEffect(() => {
     if (!gameState.reviewExpiresAt) {
-      setSecondsRemaining(90);
+      setSecondsRemaining(reviewSeconds);
       return;
     }
 
@@ -43,7 +46,7 @@ export const TrickReviewOverlay: React.FC<TrickReviewOverlayProps> = ({
     updateTimer();
     const interval = setInterval(updateTimer, 500);
     return () => clearInterval(interval);
-  }, [gameState.reviewExpiresAt]);
+  }, [gameState.reviewExpiresAt, reviewSeconds]);
 
   // Spacebar hotkey listener
   useEffect(() => {

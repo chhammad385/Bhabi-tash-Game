@@ -30,6 +30,7 @@ import {
 } from './SuitArrangementSelector';
 import { SarHistoryModal } from './SarHistoryModal';
 import { VoiceControls, VoiceErrorBanner } from '../common/VoiceControls';
+import { SuitSarTally } from './SuitSarTally';
 
 export const GameTable: React.FC = () => {
   const { user } = useAuth();
@@ -422,6 +423,9 @@ export const GameTable: React.FC = () => {
               </strong>
             </div>
           )}
+
+          {/* How much of each suit has already been cleared off the table */}
+          <SuitSarTally sarHistory={gameState.sarHistory || []} />
 
           {/* Current Played Trick Cards in Center */}
           <div className="relative z-10 flex items-center justify-center flex-wrap gap-2.5 sm:gap-5 md:gap-7 my-auto max-w-full px-2">
